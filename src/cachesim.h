@@ -1,6 +1,23 @@
 #ifndef CACHESIM_H
 #define CACHESIM_H
 
+// Shorter way to write it :P
+typedef uint64_t u64;
+
+struct inputargs_t {
+    uint64_t C, B, S, V, K;
+    std::istream *trace_file;
+};
+
+static const char *ALLOWED_ARGS = "C:B:S:V:K:i:";
+
+class main_cache {
+};
+
+class victim_cache {
+
+};
+
 struct cache_stats_t {
     uint64_t accesses;
 

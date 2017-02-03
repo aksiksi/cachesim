@@ -6,14 +6,11 @@
 
 #include "cachesim.h"
 
-struct inputargs_t {
-    uint64_t C, B, S, V, K;
-    std::istream *trace_file;
-} inputargs;
+inputargs_t inputargs;
 
 void parse_args(int argc, char **argv) {
     // Variables for getopt()
-    extern char *optarg; 
+    extern char *optarg;
     extern int optind;
     
     int c;
@@ -28,7 +25,7 @@ void parse_args(int argc, char **argv) {
     inputargs.K = DEFAULT_K;
     inputargs.trace_file = &std::cin; // Defaults to stdin
 
-    while ((c = getopt(argc, argv, "C:B:S:V:K:i:")) != -1) {
+    while ((c = getopt(argc, argv, ALLOWED_ARGS)) != -1) {
         if (c == 'C' || c == 'B' || c == 'S' || c == 'V' || c == 'K')
             num = strtol(optarg, NULL, 10);
         
@@ -60,9 +57,17 @@ void parse_args(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-    inputargs.C = 100;
-
+    // Parse command line args
+    // Info stored in global inputargs struct
     parse_args(argc, argv);
+
+    // Create cache_stats struct
+    cache_stats_t cache_stats;
+
+    std::istream *lines = inputargs.trace_file;
+
+    // Core simulation loop
+    while (1) {}
 
     std::cout << "Updated: " << inputargs.C << inputargs.V << std::endl;
 
