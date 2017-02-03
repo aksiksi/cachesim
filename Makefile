@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-c -Wall
+CFLAGS=-c -g -Wall
 OUT=bin
 
 cachesim: main.o
