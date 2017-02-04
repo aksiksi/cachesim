@@ -1,21 +1,25 @@
 #ifndef CACHESIM_H
 #define CACHESIM_H
 
-// Shorter way to write it :P
+// Shorter way to write it
 typedef uint64_t u64;
 
+// Struct type for input argument storage
 struct inputargs_t {
-    uint64_t C, B, S, V, K;
+    u64 C, B, S, V, K;
     std::istream *trace_file;
 };
 
+// Args string for getopt()
 static const char *ALLOWED_ARGS = "C:B:S:V:K:i:";
 
-class main_cache {
-};
-
-class victim_cache {
-
+/*
+    Maintains state for a single cache of any type.
+*/
+class Cache {
+public:
+    u64 C, B, S;
+    Cache(u64 C, u64 B, u64 S) : C(C), B(B), S(S) {}
 };
 
 struct cache_stats_t {

@@ -4,8 +4,15 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-#include "cachesim.h"
+#include "cachesim.hpp"
 
+// Cache::Cache(u64 C, u64 B, u64 S) {
+//     this.C = C;
+//     this.B = B;
+//     this.S = S;
+// }
+
+// Global input args struct
 inputargs_t inputargs;
 
 void parse_args(int argc, char **argv) {
@@ -46,13 +53,15 @@ void parse_args(int argc, char **argv) {
                 arg = &(inputargs.K);
                 break;
             case 'i':
-                std::ifstream ifs;
-                ifs.open(optarg);
-                inputargs.trace_file = &ifs;
+                // Create a pointer for persistence
+                std::ifstream *ifs = new std::ifstream();
+                ifs->open(optarg);
+                inputargs.trace_file = ifs;
                 break;
         }
 
-        *arg = static_cast<uint64_t>(num);
+        if (c != 'i')
+            *arg = static_cast<uint64_t>(num);
     }
 }
 
@@ -64,12 +73,16 @@ int main(int argc, char **argv) {
     // Create cache_stats struct
     cache_stats_t cache_stats;
 
-    std::istream *lines = inputargs.trace_file;
+    // Create smart ptr to heap allocated istream
+    // Deleted at end of scope
+    std::unique_ptr<std::istream> lines (inputargs.trace_file);
+    std::string line;
 
     // Core simulation loop
-    while (1) {}
-
-    std::cout << "Updated: " << inputargs.C << inputargs.V << std::endl;
+    while (!lines->eof()) {
+        getline(*lines, line);
+        std::cout << line << std::endl;
+    }
 
     return 0;
 }
