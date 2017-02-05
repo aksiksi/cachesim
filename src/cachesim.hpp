@@ -1,25 +1,67 @@
 #ifndef CACHESIM_H
 #define CACHESIM_H
 
-// Shorter way to write it
 typedef uint64_t u64;
+typedef uint8_t  u8;
 
-// Struct type for input argument storage
-struct inputargs_t {
-    u64 C, B, S, V, K;
-    std::istream *trace_file;
+struct CacheSize { 
+    u64 C, B, S, K, N;
 };
 
-// Args string for getopt()
-static const char *ALLOWED_ARGS = "C:B:S:V:K:i:";
+/**
+    Represents a single block in a cache.
+*/
+class Block {
+public:
+    // Valid and dirty bits for the block
+    u8 valid = 0, dirty = 0;
+
+    // Vector that stores subblock indices
+    std::vector<int> subblocks;
+    
+    Block(u64 K = 0) : subblocks(1 << K) {}
+};
 
 /*
     Maintains state for a single cache of any type.
 */
 class Cache {
 public:
-    u64 C, B, S;
-    Cache(u64 C, u64 B, u64 S) : C(C), B(B), S(S) {}
+    CacheSize size;
+    u64 block_mask;
+
+    // Emulates cache: stores tag -> block mapping
+    std::unordered_map<u64, Block*> cache;
+
+    Cache(CacheSize size): size(size) {
+        block_mask = 0;
+        for (int i = 0; i < size.B; i++)
+            block_mask |= (1 << i);
+    }
+
+     ~Cache() {
+        // Free allocated blocks
+        for (auto b: cache)
+            delete b.second;
+    }
+
+    void read(u64 addr) {
+        Block b* = cache.at(get_tag(addr));
+        std::cout << "Valid: " << b->valid << std::endl;
+    }
+
+    // TODO: check this stuff out...
+    
+    void write(u64 addr) {
+        Block b* = new Block(size.K);
+        b->valid = 10;
+        cache.emplace(get_tag(addr), b);
+    }
+
+private:
+    inline u64 get_tag(u64 addr) {
+        return addr & ~block_mask;
+    }
 };
 
 struct cache_stats_t {
