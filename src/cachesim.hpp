@@ -2,7 +2,6 @@
 #define CACHESIM_H
 
 typedef uint64_t u64;
-typedef uint8_t  u8;
 
 struct CacheSize { 
     u64 C, B, S, K, N;
@@ -14,12 +13,13 @@ struct CacheSize {
 class Block {
 public:
     // Valid and dirty bits for the block
-    u8 valid = 0, dirty = 0;
+    int valid = 0, dirty = 0;
 
     // Vector that stores subblock indices
     std::vector<int> subblocks;
     
-    Block(u64 K = 0) : subblocks(1 << K) {}
+    Block() {}
+    Block(u64 K) : subblocks(1 << K) {}
 };
 
 /*
@@ -39,22 +39,26 @@ public:
             block_mask |= (1 << i);
     }
 
-     ~Cache() {
+    ~Cache() {
         // Free allocated blocks
         for (auto b: cache)
             delete b.second;
     }
 
     void read(u64 addr) {
-        Block b* = cache.at(get_tag(addr));
-        std::cout << "Valid: " << b->valid << std::endl;
-    }
+        Block *b;
 
-    // TODO: check this stuff out...
+        try {
+            b = cache.at(get_tag(addr));
+            std::cout << "HIT: " << addr << std::endl;
+        } catch (const std::out_of_range& e) {
+            std::cout << "MISS: " << addr << std::endl;
+        }
+    }
     
     void write(u64 addr) {
-        Block b* = new Block(size.K);
-        b->valid = 10;
+        Block *b = new Block(size.K);
+        b->valid = 1;
         cache.emplace(get_tag(addr), b);
     }
 

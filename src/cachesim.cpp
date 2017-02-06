@@ -14,12 +14,12 @@
 struct inputargs_t {
     u64 C, B, S, V, K, N;
     std::istream *trace_file;
-} args;
+};
 
 /**
     Parse command line arguments using getopt().
 */
-void parse_args(int argc, char **argv) {
+void parse_args(int argc, char **argv, inputargs_t &args) {
     // Variables for getopt()
     extern char *optarg;
     extern int optind;
@@ -83,9 +83,12 @@ void parse_args(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+    // Allocate a args struct and pass by ref
+    inputargs_t args;
+
     // Parse command line args
     // Info stored in global args `struct`
-    parse_args(argc, argv);
+    parse_args(argc, argv, args);
 
     // Create cache_stats `struct`
     cache_stats_t cache_stats;
@@ -108,15 +111,23 @@ int main(int argc, char **argv) {
 
     Cache L1 (cache_size);
 
-    std::cout << L1.size.C << " " << L1.size.B << L1.block_mask << std::endl;
-
-    L1.write(0x10010101);
-    L1.read(0x10010101);
+    std::cout << L1.size.C << " " << L1.size.B << " " << L1.block_mask << std::endl;
 
     // Core simulation loop
-    while (!fs->eof()) {
-        // Read data from line
-        *fs >> mode >> address;
+    while (*fs >> mode >> address) {
+        switch (mode) {
+            case 'r':
+            case 'R':
+                L1.read(address);
+                break;
+            case 'w':
+            case 'W':
+                L1.write(address);
+                break;
+            default:
+                std::cout << "Error: Invalid input file format.\n";
+                exit(EXIT_FAILURE);
+        }
 
         std::cout << mode << " " << address << std::endl;
     }
