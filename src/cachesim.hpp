@@ -3,6 +3,11 @@
 
 typedef uint64_t u64;
 
+void exit_on_error(std::string msg) {
+    std::cout << "Error: " << msg << std::endl;
+    exit(EXIT_FAILURE);
+}
+
 struct CacheSize { 
     u64 C, B, S, K, N;
 };
@@ -13,13 +18,41 @@ struct CacheSize {
 class Block {
 public:
     // Valid and dirty bits for the block
-    int valid = 0, dirty = 0;
+    int valid = 1, dirty = 0;
 
-    // Vector that stores subblock indices
+    // Vector that stores subblocks
+    // If value = 1, subblock is present
     std::vector<int> subblocks;
+    int n; // Number of subblocks
+
+    // Init subblocks to all 0s
+    Block(u64 K) : subblocks(1 << K, 0), n(1 << K) {}
+
+    // Read a single subblock
+    bool read(int offset) {
+        if (offset >= n)
+            exit_on_error("Subblock index out of range.");
+
+        if (subblocks[offset] == 1)
+            return true;
+        
+        return false;
+    }
     
-    Block() {}
-    Block(u64 K) : subblocks(1 << K) {}
+    // Write a single sublock
+    void write(int offset) {
+        if (offset >= n)
+            exit_on_error("Subblock index out of range.");
+
+        subblocks[offset] = 1;
+        dirty = 1;
+    }
+
+    // Write multiple subblocks (prefetch)
+    void write_many(std::vector<int> &offsets) {
+        for (auto idx: offsets)
+            write(idx);
+    }
 };
 
 /*
@@ -33,6 +66,9 @@ public:
     // Emulates cache: stores tag -> block mapping
     std::unordered_map<u64, Block*> cache;
 
+    // LRU stack
+    std::vector<Block*> LRU;
+
     Cache(CacheSize size): size(size) {
         block_mask = 0;
         for (int i = 0; i < size.B; i++)
@@ -45,26 +81,43 @@ public:
             delete b.second;
     }
 
-    void read(u64 addr) {
+    bool read(u64 addr) {
         Block *b;
+        bool hit = false;
 
         try {
             b = cache.at(get_tag(addr));
-            std::cout << "HIT: " << addr << std::endl;
-        } catch (const std::out_of_range& e) {
-            std::cout << "MISS: " << addr << std::endl;
-        }
+            LRU.push_back(b);
+            hit = true;
+        } catch (const std::out_of_range& e) {}
+
+        return hit;
     }
     
     void write(u64 addr) {
-        Block *b = new Block(size.K);
-        b->valid = 1;
-        cache.emplace(get_tag(addr), b);
+        // TODO: incorporate replacement
+        Block *b;
+        auto search = cache.find(addr);
+        
+        if (search == cache.end()) {
+            // Not found, create a new one
+            b = new Block(size.K);
+            cache.emplace(get_tag(addr), b);
+        } else {
+            b = search->second;
+
+            int offset = get_offset(addr);
+            b->write(offset);
+        }
     }
 
 private:
     inline u64 get_tag(u64 addr) {
         return addr & ~block_mask;
+    }
+
+    inline int get_offset(u64 addr) {
+        return addr & block_mask;
     }
 };
 

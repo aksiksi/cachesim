@@ -76,10 +76,8 @@ void parse_args(int argc, char **argv, inputargs_t &args) {
     args.N = args.C - args.B;
 
     // Error checking
-    if (args.B > args.C) {
-        std::cout << "Error: B cannot be greater than C.\n";
-        exit(EXIT_FAILURE);
-    }
+    if (args.B > args.C)
+        exit_on_error("B cannot be greater than C.");
 }
 
 int main(int argc, char **argv) {
@@ -113,23 +111,26 @@ int main(int argc, char **argv) {
 
     std::cout << L1.size.C << " " << L1.size.B << " " << L1.block_mask << std::endl;
 
+    bool hit;
+
     // Core simulation loop
     while (*fs >> mode >> address) {
+        std::cout << mode << " " << address << std::endl;
+        
         switch (mode) {
             case 'r':
             case 'R':
-                L1.read(address);
+                hit = L1.read(address);
+                if (hit)
+                    std::cout << "Hit: " << address << std::endl;
                 break;
             case 'w':
             case 'W':
                 L1.write(address);
                 break;
             default:
-                std::cout << "Error: Invalid input file format.\n";
-                exit(EXIT_FAILURE);
+                exit_on_error("Invalid input file format");
         }
-
-        std::cout << mode << " " << address << std::endl;
     }
 
     return 0;
