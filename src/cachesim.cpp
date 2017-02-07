@@ -15,6 +15,17 @@ void exit_on_error(std::string msg) {
     exit(EXIT_FAILURE);
 }
 
+CacheType find_cache_type(CacheSize size) {
+    // Determine cache type
+    if (size.S == (size.C - size.B)) {
+        return CacheType::FULLY_ASSOC;
+    } else if (size.S == 0) {
+        return CacheType::DIRECT_MAPPED;
+    } else {
+        return CacheType::SET_ASSOC;
+    }
+}
+
 // Struct type for input argument storage
 struct inputargs_t {
     u64 C, B, S, V, K, N;
@@ -108,25 +119,30 @@ int main(int argc, char **argv) {
         args.N
     };
 
-    Cache L1 (cache_size, &stats);
+    // Find cache type (DM, FA, or SA)
+    CacheType ct = find_cache_type(cache_size);
+
+    // Create L1 cache with given size, type
+    // Pass in stats object
+    Cache L1 (cache_size, ct, &stats);
 
     // Variables for formatting trace input
     char mode;
     u64 address;
     bool hit;
 
-    std::cout << L1.size.C << " " << L1.size.B << " " << L1.block_mask << std::endl;
+    std::cout << L1.size.C << " " << L1.size.B << " " << L1.index_mask << std::endl;
 
     // Core simulation loop
-    while (*fs >> mode >> address) {
-        std::cout << mode << " " << address << std::endl;
+    while (*fs >> mode >> std::hex >> address) {
+        std::cout << mode << " " << std::hex << address << std::endl;
 
         switch (mode) {
             case 'r':
             case 'R':
                 hit = L1.read(address);
                 if (hit)
-                    std::cout << "Hit: " << address << std::endl;
+                    std::cout << "Hit: " << std::hex << address << std::endl;
                 break;
             case 'w':
             case 'W':
@@ -138,7 +154,7 @@ int main(int argc, char **argv) {
     }
 
     // Print some stats
-    std::cout << std::endl << "Stats" << std::endl;
+    std::cout << std::dec << std::endl << "Stats" << std::endl;
     std::cout << "=====" << std::endl;
     std::cout << "Reads: " << stats.reads << std::endl;
     std::cout << "Read Misses: " << stats.read_misses << std::endl;
