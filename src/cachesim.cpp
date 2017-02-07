@@ -1,14 +1,19 @@
 // C++ includes
 #include <string>
-#include <vector>
 #include <fstream>
 #include <iostream>
-#include <unordered_map>
-#include "cachesim.hpp"
 
 // C includes
 #include <stdlib.h>
 #include <unistd.h>
+
+#include "cachesim.hpp"
+#include "cache.hpp"
+
+void exit_on_error(std::string msg) {
+    std::cout << "Error: " << msg << std::endl;
+    exit(EXIT_FAILURE);
+}
 
 // Struct type for input argument storage
 struct inputargs_t {
@@ -19,13 +24,13 @@ struct inputargs_t {
 /**
     Parse command line arguments using getopt().
 */
-void parse_args(int argc, char **argv, inputargs_t &args) {
+void parse_args(int argc, char **argv, inputargs_t& args) {
     // Variables for getopt()
     extern char *optarg;
     extern int optind;
 
     // Args string for getopt()
-    static const char *ALLOWED_ARGS = "C:B:S:V:K:i:";
+    static const char* ALLOWED_ARGS = "C:B:S:V:K:i:";
     
     int c;
     uint64_t num;  // Stores converted arg from char* to uint64_t
@@ -89,15 +94,11 @@ int main(int argc, char **argv) {
     parse_args(argc, argv, args);
 
     // Create cache_stats `struct`
-    cache_stats_t cache_stats;
+    cache_stats_t stats = {};
 
     // Create smart ptr to heap allocated `istream`
     // (deleted at end of scope)
     std::unique_ptr<std::istream> fs (args.trace_file);
-
-    // Variables for formatting trace input
-    char mode;
-    u64 address;
 
     CacheSize cache_size = {
         args.C,
@@ -107,16 +108,19 @@ int main(int argc, char **argv) {
         args.N
     };
 
-    Cache L1 (cache_size);
+    Cache L1 (cache_size, &stats);
+
+    // Variables for formatting trace input
+    char mode;
+    u64 address;
+    bool hit;
 
     std::cout << L1.size.C << " " << L1.size.B << " " << L1.block_mask << std::endl;
-
-    bool hit;
 
     // Core simulation loop
     while (*fs >> mode >> address) {
         std::cout << mode << " " << address << std::endl;
-        
+
         switch (mode) {
             case 'r':
             case 'R':
@@ -132,6 +136,14 @@ int main(int argc, char **argv) {
                 exit_on_error("Invalid input file format");
         }
     }
+
+    // Print some stats
+    std::cout << std::endl << "Stats" << std::endl;
+    std::cout << "=====" << std::endl;
+    std::cout << "Reads: " << stats.reads << std::endl;
+    std::cout << "Read Misses: " << stats.read_misses << std::endl;
+    std::cout << "Bytes Xferred: " << stats.bytes_transferred << std::endl;
+
 
     return 0;
 }
