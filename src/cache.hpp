@@ -3,6 +3,8 @@
 
 #include <vector>
 
+#define DEBUG true
+
 struct CacheSize {
     u64 C, B, S, K, N;
 };
@@ -14,21 +16,13 @@ enum CacheType {
     VICTIM
 };
 
-struct CacheResult {
-    int bytes_read = -1;
-    int bytes_written = -1;
-    bool read_hit = false;
-    bool write_hit = false;
-};
-
 /**
     Represents a single block in a cache.
 */
 class Block {
 public:
-    // Vector that stores subblocks
-    // If value = 1, subblock is present
-    std::vector<int> subblocks;
+    // Stores valid bits for each subblock
+    std::vector<int> valid;
     
     int n; // Number of subblocks
     u64 B; // Block size
@@ -36,7 +30,7 @@ public:
     bool sb; // Enable/disable subblocking
 
     u64 tag = 0;
-    int valid = 0, dirty = 0;
+    bool dirty = false;
 
     // Init subblocks
     // sb = true -> subblocking enabled
@@ -52,6 +46,7 @@ public:
     int write_many(u64 offset);
 
     void replace(u64 tag);
+    void empty();
 };
 
 class VictimCache {
@@ -100,11 +95,15 @@ public:
 
     Cache(CacheSize size, CacheType ct, cache_stats_t* cs);
 
-    bool read(u64 addr);
+    int read(u64 addr);
     
     bool write(u64 addr);
 
 private:
+    std::shared_ptr<Block> find_victim(u64 tag, u64 index);
+
+    void evict(u64 tag, u64 index);
+    
     inline u64 get_tag(u64 addr) {
         return addr & tag_mask;
     }

@@ -22,10 +22,10 @@ struct cache_stats_t {
 
     uint64_t subblock_misses;
 
-	uint64_t bytes_transferred; 
+	uint64_t bytes_transferred;
    
-	uint64_t hit_time;
-    uint64_t miss_penalty;
+	double   hit_time;
+    double   miss_penalty;
     double   miss_rate;
     double   avg_access_time;
 };

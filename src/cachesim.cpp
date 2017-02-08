@@ -4,6 +4,8 @@
 #include <iostream>
 
 // C includes
+#include <inttypes.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -13,6 +15,26 @@
 void exit_on_error(std::string msg) {
     std::cout << "Error: " << msg << std::endl;
     exit(EXIT_FAILURE);
+}
+
+void print_statistics(cache_stats_t* p_stats) {
+    printf("Cache Statistics\n");
+    printf("Accesses: %" PRIu64 "\n", p_stats->accesses);
+    printf("Reads: %" PRIu64 "\n", p_stats->reads);
+    printf("Read misses: %" PRIu64 "\n", p_stats->read_misses);
+    printf("Read misses combined: %" PRIu64 "\n", p_stats->read_misses_combined);
+    printf("Writes: %" PRIu64 "\n", p_stats->writes);
+    printf("Write misses: %" PRIu64 "\n", p_stats->write_misses);
+    printf("Write misses combined: %" PRIu64 "\n", p_stats->write_misses_combined);
+    printf("Misses: %" PRIu64 "\n", p_stats->misses);
+    printf("Writebacks: %" PRIu64 "\n", p_stats->write_backs);
+    printf("Victim cache misses: %" PRIu64 "\n", p_stats->vc_misses);
+    printf("Sub-block misses: %" PRIu64 "\n", p_stats->subblock_misses);
+    printf("Bytes transferred to/from memory: %" PRIu64 "\n", p_stats->bytes_transferred);
+    printf("Hit Time: %f\n", p_stats->hit_time);
+    printf("Miss Penalty: %f\n", p_stats->miss_penalty);
+    printf("Miss rate: %f\n", p_stats->miss_rate);
+    printf("Average access time (AAT): %f\n", p_stats->avg_access_time);
 }
 
 CacheType find_cache_type(CacheSize size) {
@@ -160,6 +182,7 @@ int main(int argc, char **argv) {
     std::cout << "Read Misses: " << stats.read_misses << std::endl;
     std::cout << "Bytes Xferred: " << stats.bytes_transferred << std::endl;
 
+    // print_statistics(&stats);
 
     return 0;
 }
