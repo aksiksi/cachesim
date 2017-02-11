@@ -1,103 +1,7 @@
 // C++ includes
 #include <iostream>
 
-#include "cachesim.hpp"
 #include "cache.hpp"
-
-Block::Block(u64 B, u64 K, bool sb) : B(B), K(K), sb(sb) {
-    // Skip init if no subblocking
-    if (!sb) return;
-    
-    // Number of subblocks = 2^B / 2^K
-    n = (1 << (B-K));
-    valid.reserve(n);
-    std::fill(valid.begin(), valid.end(), 0);
-}
-
-// Read a single subblock
-bool Block::read(u64 offset) {
-    // No subblocking = always hit
-    if (!sb) return true;
-
-    int idx = find_idx(offset);
-    
-    if (idx > n)
-        exit_on_error("Subblock index out of range.");
-
-    if (valid[idx] == 1)
-        return true;
-    
-    return false;
-}
-
-bool Block::write(u64 subblock) {
-    if (!sb) return false;
-    
-    if (subblock > n)
-        exit_on_error("Subblock index out of range.");
-
-    // Only fetch invalid subblocks
-    if (valid[subblock] == 0) {
-        valid[subblock] = 1;
-        return true;
-    }
-
-    return false;
-}
-
-// Write multiple subblocks (prefetch)
-// Returns number of bytes written
-int Block::write_many(u64 offset) {
-    // If no subblocking, always write entire block
-    if (!sb) return (1 << B);
-    
-    int c = 0;
-    
-    // Figure out which subblock is being requested
-    int idx = find_idx(offset);
-    
-    // Iterate through all offsets
-    // Only count invalid subblock writes
-    for (int i = idx; i < n; i++)
-        if (write(i))
-            c++;
-
-    return c;
-}
-
-void Block::replace(u64 tag, bool full) {    
-    this->tag = tag;
-    this->dirty = false;
-
-    // Full block replace => all valid
-    if (full)
-        std::fill(valid.begin(), valid.end(), 1);
-}
-
-void Block::empty() {
-    // TODO
-    tag = 0;
-    dirty = false;
-    // Comment out to get correct values -- see TSquare
-    // std::fill(valid.begin(), valid.end(), 0);
-}
-
-int Block::num_valid() {
-    int c = 0;
-
-    for (int i = 0; i < n; i++)
-        if (valid[i] == 1)
-            c++;
-    
-    return c;
-}
-
-int Block::find_idx(u64 offset) {
-     // Figure out which subblock is being requested
-    float max_offset = (1 << B) - 1;
-    int idx = (int)((offset / max_offset) * (n-1));
-    return idx;
-}
 
 Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) : 
             size(size), ct(ct), stats(cs) {
@@ -214,8 +118,13 @@ CacheResult Cache::read(u64 addr) {
         // Subblock miss! -> Perform prefetch
         else {
             stats->subblock_misses++;
-            int bytes = block->write_many(offset);
-            stats->bytes_transferred += bytes;
+
+            // Only count invalid subblocks for prefetch
+            int num_invalid = block->num_invalid(offset);
+            stats->bytes_transferred += num_invalid;
+
+            block->write_many(offset);
+        
             return READ_SB_MISS;
         }
     } else {
@@ -236,16 +145,10 @@ CacheResult Cache::read(u64 addr) {
 }
 
 CacheResult Cache::write(u64 addr) {
-    // TODO: incorporate replacement
-    // Replacement differs:
-    // DM: MUST place at tag position
-    // FA: can place anywhere (use lru stack)
-    // SA: MUST place in correct set (use index mask)
     u64 tag = get_tag(addr);
     u64 index = get_index(addr);
     u64 offset = get_offset(addr);
 
-    // TODO: is this needed?
     // lru_push(tag, index);
 
     stats->accesses++;
@@ -366,9 +269,9 @@ Cache::evict(u64 tag, u64 index) {
         // Check if dirty first => writeback
         if (block->dirty) {
             // Write back to memory
-            int valid_bytes = block->num_valid();
+            // int valid_bytes = block->num_valid();
             // stats->bytes_transferred += (1 << size.B);
-            stats->bytes_transferred += valid_bytes;
+            stats->bytes_transferred += (1 << size.B); // TRY
             stats->write_backs++;
         }
 

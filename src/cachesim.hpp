@@ -1,6 +1,9 @@
 #ifndef CACHESIM_H
 #define CACHESIM_H
 
+#include <inttypes.h>
+#include <string>
+
 typedef uint64_t u64;
 
 void exit_on_error(std::string msg);

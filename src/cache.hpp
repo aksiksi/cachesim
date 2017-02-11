@@ -3,6 +3,9 @@
 
 #include <vector>
 
+#include "cachesim.hpp"
+#include "block.hpp"
+
 #define DEBUG true
 
 struct CacheSize {
@@ -23,42 +26,6 @@ enum CacheResult {
     WRITE_MISS,
     WRITE_HIT,
     WRITE_SB_MISS
-};
-
-/**
-    Represents a single block in a cache.
-*/
-class Block {
-public:
-    // Stores valid bits for each subblock
-    std::vector<int> valid;
-    
-    int n; // Number of subblocks
-    u64 B; // Block size
-    u64 K; // Number of bytes / subblock
-
-    bool sb; // Enable/disable subblocking
-
-    u64 tag = 0;
-    bool dirty = false;
-
-    // Init subblocks
-    // sb = true -> subblocking enabled
-    Block(u64 B, u64 K, bool sb);
-
-    // Read a single subblock
-    bool read(u64 offset);
-    
-    // Write a single sublock
-    bool write(u64 offset);
-
-    // Write multiple subblocks (prefetch)
-    int write_many(u64 offset);
-
-    void replace(u64 tag, bool full);
-    void empty();
-    int num_valid();
-    int find_idx(u64 offset);
 };
 
 class VictimCache {

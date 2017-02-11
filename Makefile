@@ -4,7 +4,7 @@ OUT=bin
 
 all: cachesim
 
-cachesim: cachesim.o cache.o
+cachesim: block.o cachesim.o cache.o
 	$(CC) $(OUT)/*.o -o cachesim
 
 cachesim.o: src/cachesim.cpp
@@ -12,6 +12,9 @@ cachesim.o: src/cachesim.cpp
 
 cache.o: src/cache.cpp
 	$(CC) $(CFLAGS) src/cache.cpp -o $(OUT)/cache.o
+
+block.o: src/block.cpp
+	$(CC) $(CFLAGS) src/block.cpp -o $(OUT)/block.o
 
 clean:
 	rm $(OUT)/*.o
