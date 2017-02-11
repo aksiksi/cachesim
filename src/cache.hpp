@@ -16,6 +16,15 @@ enum CacheType {
     VICTIM
 };
 
+enum CacheResult {
+    READ_HIT,
+    READ_MISS,
+    READ_SB_MISS,
+    WRITE_MISS,
+    WRITE_HIT,
+    WRITE_SB_MISS
+};
+
 /**
     Represents a single block in a cache.
 */
@@ -26,6 +35,7 @@ public:
     
     int n; // Number of subblocks
     u64 B; // Block size
+    u64 K; // Number of bytes / subblock
 
     bool sb; // Enable/disable subblocking
 
@@ -40,13 +50,15 @@ public:
     bool read(u64 offset);
     
     // Write a single sublock
-    void write(u64 offset);
+    bool write(u64 offset);
 
     // Write multiple subblocks (prefetch)
     int write_many(u64 offset);
 
-    void replace(u64 tag);
+    void replace(u64 tag, bool full);
     void empty();
+    int num_valid();
+    int find_idx(u64 offset);
 };
 
 class VictimCache {
@@ -91,18 +103,22 @@ public:
     cache_stats_t* stats;
 
     // LRU stack
-    // std::vector<u64> LRU;
+    // 2D vector of tags
+    std::vector<std::vector<u64>> lru;
+    std::size_t lru_size = 0; // For FA cache only
 
     Cache(CacheSize size, CacheType ct, cache_stats_t* cs);
 
-    int read(u64 addr);
-    
-    bool write(u64 addr);
+    CacheResult read(u64 addr);
+    CacheResult write(u64 addr);
 
 private:
     std::shared_ptr<Block> find_victim(u64 tag, u64 index);
+    std::shared_ptr<Block> evict(u64 tag, u64 index);
 
-    void evict(u64 tag, u64 index);
+    // LRU methods
+    void lru_push(u64 tag, u64 index);
+    u64 lru_get(u64 index);
     
     inline u64 get_tag(u64 addr) {
         return addr & tag_mask;

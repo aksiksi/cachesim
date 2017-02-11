@@ -30,8 +30,8 @@ struct cache_stats_t {
     double   avg_access_time;
 };
 
-static const uint64_t DEFAULT_C = 15;   /* 32KB Cache */
-static const uint64_t DEFAULT_B = 6;    /* 64-byte blocks */
+static const uint64_t DEFAULT_C = 15;   /* 64KB Cache */
+static const uint64_t DEFAULT_B = 5;    /* 32-byte blocks */
 static const uint64_t DEFAULT_S = 3;    /* 8 blocks per set */
 static const uint64_t DEFAULT_V = 4;    /* 4 victim blocks */
 static const uint64_t DEFAULT_K = 3;	/* 8 byte sub-blocks */

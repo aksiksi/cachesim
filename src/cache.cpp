@@ -4,7 +4,7 @@
 #include "cachesim.hpp"
 #include "cache.hpp"
 
-Block::Block(u64 B, u64 K, bool sb) : B(B), sb(sb) {
+Block::Block(u64 B, u64 K, bool sb) : B(B), K(K), sb(sb) {
     // Skip init if no subblocking
     if (!sb) return;
     
@@ -18,9 +18,9 @@ Block::Block(u64 B, u64 K, bool sb) : B(B), sb(sb) {
 bool Block::read(u64 offset) {
     // No subblocking = always hit
     if (!sb) return true;
+
+    int idx = find_idx(offset);
     
-    // Figure out which subblock is being requested
-    int idx = offset % n;
     if (idx > n)
         exit_on_error("Subblock index out of range.");
 
@@ -30,14 +30,19 @@ bool Block::read(u64 offset) {
     return false;
 }
 
-void Block::write(u64 offset) {
-    if (!sb) return;
+bool Block::write(u64 subblock) {
+    if (!sb) return false;
     
-    int idx = offset % n;
-    if (idx > n)
+    if (subblock > n)
         exit_on_error("Subblock index out of range.");
 
-    valid[idx] = 1;
+    // Only fetch invalid subblocks
+    if (valid[subblock] == 0) {
+        valid[subblock] = 1;
+        return true;
+    }
+
+    return false;
 }
 
 // Write multiple subblocks (prefetch)
@@ -48,26 +53,50 @@ int Block::write_many(u64 offset) {
     
     int c = 0;
     
+    // Figure out which subblock is being requested
+    int idx = find_idx(offset);
+    
     // Iterate through all offsets
-    for (; offset < (1 << B); offset++, c++)
-        write(offset);
+    // Only count invalid subblock writes
+    for (int i = idx; i < n; i++)
+        if (write(i))
+            c++;
 
     return c;
 }
 
-void Block::replace(u64 tag) {
+void Block::replace(u64 tag, bool full) {    
     this->tag = tag;
     this->dirty = false;
 
     // Full block replace => all valid
-    std::fill(valid.begin(), valid.end(), 1);
+    if (full)
+        std::fill(valid.begin(), valid.end(), 1);
 }
 
 void Block::empty() {
     // TODO
     tag = 0;
     dirty = false;
-    std::fill(valid.begin(), valid.end(), 0);
+    // Comment out to get correct values -- see TSquare
+    // std::fill(valid.begin(), valid.end(), 0);
+}
+
+int Block::num_valid() {
+    int c = 0;
+
+    for (int i = 0; i < n; i++)
+        if (valid[i] == 1)
+            c++;
+    
+    return c;
+}
+
+int Block::find_idx(u64 offset) {
+     // Figure out which subblock is being requested
+    float max_offset = (1 << B) - 1;
+    int idx = (int)((offset / max_offset) * (n-1));
+    return idx;
 }
 
 Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) : 
@@ -76,7 +105,7 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
     
     offset_mask = (1 << B) - 1;
 
-    if (ct == CacheType::DIRECT_MAPPED || ct == CacheType::SET_ASSOC)
+    if (ct == DIRECT_MAPPED || ct == SET_ASSOC)
         index_mask = ((1 << (C-B-S)) - 1) << B;
 
     tag_mask = ~(index_mask | offset_mask);
@@ -84,24 +113,21 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
     // Init the cache based on given parameters
     // First, figure out rows and cols for cache
     switch (ct) {
-        case CacheType::FULLY_ASSOC:
-        case CacheType::DIRECT_MAPPED:
+        case FULLY_ASSOC:
+        case DIRECT_MAPPED:
             rows = (1 << (C-B));
             cols = 1;
             break;
-        case CacheType::SET_ASSOC:
+        case SET_ASSOC:
             rows = (1 << (C-B-S));
             cols = (1 << S);
             break;
-        // case CacheType::VICTIM:
-        //     rows = (1 << (V-B));
-        //     cols = 1;
-        //     break;
     }
     
     // Enable or disable subblocking
     bool sb = true;
 
+    // Init cache
     // Set maximum size of vector for optimization
     cache.resize(rows, std::vector<std::shared_ptr<Block>>(cols));
 
@@ -111,6 +137,9 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
         for (int j = 0; j < cols; j++)
             cache[i][j] = std::shared_ptr<Block>(new Block(B, K, sb));
 
+    // Init lru
+    lru.resize(rows, std::vector<u64>(cols, 0));
+
     #ifdef DEBUG
         std::cout << "Tag mask: " << std::hex << tag_mask << std::endl;
         std::cout << "Index mask: " << index_mask << std::endl;
@@ -118,23 +147,27 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
         
         std::string t;
 
-        if (ct == CacheType::DIRECT_MAPPED)
+        if (ct == DIRECT_MAPPED)
             t = "Direct";
-        else if (ct == CacheType::FULLY_ASSOC)
+        else if (ct == FULLY_ASSOC)
             t = "Fully Associative";
         else
             t = "Set Associative";
 
         std::cout << "Cache type: " << t << std::endl;
     #endif
+
+    stats->hit_time = 2 + 0.1 * (1 << S);
+    stats->miss_penalty = 100;
 }
 
-int Cache::read(u64 addr) {
-    // TODO
-    // 1. Add sublock miss support
+CacheResult Cache::read(u64 addr) {
     u64 tag = get_tag(addr);
     u64 index = get_index(addr);
     u64 offset = get_offset(addr);
+
+    // Add access to LRU
+    lru_push(tag, index);
 
     stats->accesses++;
     stats->reads++;
@@ -142,57 +175,24 @@ int Cache::read(u64 addr) {
     bool hit = false;
     std::shared_ptr<Block> block;
 
-    if (ct == CacheType::FULLY_ASSOC) {
+    if (ct == FULLY_ASSOC) {
         // FA cache -> search for tag directly
         for (auto each: cache) {
             auto b = each[0];
 
-            // Check for tag in cache
+            // Check for tag
             if (b->tag == tag) {
                 hit = true;
                 block = b;
-
-                // // Check for subblock
-                // if (block->read(offset))
-                //     return 0; // Hit!
-                // // Subblock miss! -> Perform prefetch
-                // else {
-                //     // Retrieve current and all following from memory
-                //     stats->subblock_misses++;
-                //     int bytes = block->write_many(offset);
-                //     stats->bytes_transferred += bytes;
-                //     return bytes; // Number of bytes fetched
-                // }
+                break;
             }
         }
-
-        // Block not found, retrieve from memory and store in cache
-        stats->read_misses++;
-
-        // Retrieve block and write to cache
-        // TODO: Replace with write()
-        auto block = cache[0][0]; // TODO: better replace (global LRU)
-        block->replace(tag);
-        int bytes = (1 << size.B);
-        stats->bytes_transferred += bytes;
-        stats->accesses++;
-        return bytes;
-    } else if (ct == CacheType::DIRECT_MAPPED) {
+    } else if (ct == DIRECT_MAPPED) {
         // Retrieve the "only" possible block
         auto b = cache[index][0];
 
-        if (b->tag == tag) {
+        if (b->tag == tag)
             hit = true;
-            block = b;
-        }
-        else {
-            // Block miss!
-            stats->read_misses++;
-            block->replace(tag);
-            stats->bytes_transferred += (1 << size.B);
-            stats->accesses++;
-            return (1 << size.B);
-        }
     } else {
         // Set associative cache
         // Retrieve set based on index
@@ -202,91 +202,74 @@ int Cache::read(u64 addr) {
             if (b->tag == tag) {
                 hit = true;
                 block = b;
+                break;
             }
         }
-
-        // Block not found, retrieve from memory and store in cache
-        stats->read_misses++;
-
-        // Evict first block in set
-        // TODO: Use write()
-        auto block = set[0]; // TODO: better replace (based on LRU)
-        block->replace(tag);
-        int bytes = (1 << size.B);
-        stats->bytes_transferred += bytes;
-        stats->accesses++;
-        return bytes;
     }
 
     if (hit) {
-        // Check for subblock
+        // Subblock hit
         if (block->read(offset))
-            return 0; // Hit!
+            return READ_HIT;
         // Subblock miss! -> Perform prefetch
         else {
-            // Retrieve current and all following from memory
             stats->subblock_misses++;
             int bytes = block->write_many(offset);
             stats->bytes_transferred += bytes;
-            return bytes; // Number of bytes fetched
+            return READ_SB_MISS;
         }
     } else {
-        // Full miss
+        // Full read miss
         // Retrieve subblock and prefetch subsequent
         stats->read_misses++;
         
-        block = find_victim(tag, index);
-        
-        // Write back if dirty
-        if (block->dirty) {
-            stats->bytes_transferred += (1 << size.B);
-            stats->write_backs++;
-        }
+        // Find suitable victim to evict
+        // Or return first empty block
+        block = evict(tag, index);
 
-        // Empty block and fetch required subblocks
-        block->empty();
-        block->tag = tag;
-
+        // Fetch required subblocks from memory
         int bytes = block->write_many(offset);
         stats->bytes_transferred += bytes;
 
-        return bytes;
+        return READ_MISS;
     }
 }
 
-bool Cache::write(u64 addr) {
+CacheResult Cache::write(u64 addr) {
     // TODO: incorporate replacement
     // Replacement differs:
     // DM: MUST place at tag position
-    // FA: can place anywhere (use LRU stack)
+    // FA: can place anywhere (use lru stack)
     // SA: MUST place in correct set (use index mask)
     u64 tag = get_tag(addr);
     u64 index = get_index(addr);
+    u64 offset = get_offset(addr);
+
+    // TODO: is this needed?
+    // lru_push(tag, index);
 
     stats->accesses++;
     stats->writes++;
 
     bool hit = false;
-
     std::shared_ptr<Block> block;
 
-    if (ct == CacheType::FULLY_ASSOC) {
+    if (ct == FULLY_ASSOC) {
         for (auto each: cache) {
             auto b = each[0];
 
             // Check for tag in cache
             if (b->tag == tag) {
-                hit = true;
                 block = b;
+                hit = true;
+                break;
             }
         }
-    } else if (ct == CacheType::DIRECT_MAPPED) {
+    } else if (ct == DIRECT_MAPPED) {
         auto b = cache[index][0];
         
-        if (b->tag == tag) {
+        if (b->tag == tag)
             hit = true;
-            block = b;
-        }
     } else {
         auto set = cache[index];
 
@@ -294,57 +277,206 @@ bool Cache::write(u64 addr) {
             if (b->tag == tag) {
                 hit = true;
                 block = b;
+                break;
             }
         }
     }
 
     if (hit) {
-        block->replace(tag);
-        stats->bytes_transferred += (1 << size.B); // TODO: check this value
+        block->write_many(offset);
+        // block->replace(tag, true); // Full block replace
     } else {
         // Miss handled the same in all cases
         // Select a block, and evict it
-        evict(tag, index);
+        // If there is an empty spot, that is returned instead
+        block = evict(tag, index);
+
+        // Write data to it
+        block->write_many(offset);
+
         stats->write_misses++;
     }
 
     block->dirty = true;
 
-    return hit;
+    if (hit)
+        return WRITE_HIT;
+    else
+        return WRITE_MISS;
 }
 
 std::shared_ptr<Block>
 Cache::find_victim(u64 tag, u64 index) {
+    // Figure out candidate block for cache eviction
+    // IF there are empty blocks, return first such one as a "victim"
     std::shared_ptr<Block> block;
+    u64 victim_tag;
+    
+    if (ct == FULLY_ASSOC) {
+        // Look for an empty block first 
+        for (int i = 0; i < cache.size(); i++) {
+            block = cache[i][0];
+            if (block->tag == 0)
+                return block;
+        }
 
-    // Figure out candidate block for eviction
-    if (ct == CacheType::FULLY_ASSOC) {
-        block = cache[0][0]; // TODO: FIX
-    } else if (ct == CacheType::DIRECT_MAPPED) {
+        // Now look for a victim
+        victim_tag = lru_get(index);
+
+        for (int i = 0; i < cache.size(); i++) {
+            block = cache[i][0];
+            if (block->tag == victim_tag)
+                break;
+        }
+    } else if (ct == DIRECT_MAPPED) {
         block = cache[index][0];
     } else {
-        block = cache[index][0]; // TODO: FIX
+        auto set = cache[index];
+
+        // Look for empty block first
+        for (int i = 0; i < set.size(); i++) {
+            block = set[i];
+            if (block->tag == 0)
+                return block;
+        }
+
+        // Time for a victim..
+        victim_tag = lru_get(index);
+
+        for (int i = 0; i < set.size(); i++) {
+            block = set[i];
+            if (block->tag == victim_tag)
+                break;
+        }
     }
 
     return block;
 }
 
-void Cache::evict(u64 tag, u64 index) {
+std::shared_ptr<Block>
+Cache::evict(u64 tag, u64 index) {
     // Find block to use in cache
     // If block selected is dirty, write it to memory
     // Then replace it
     auto block = find_victim(tag, index);
-    
-    // Replace the block in cache
-    // Check if dirty first => writeback
-    if (block->dirty) {
-        // Write back to memory
-        stats->bytes_transferred += (1 << size.B);
-        stats->write_backs++;
+
+    // Empty block => just ignore the eviction
+    if (block->tag != 0) {
+        // Replace the block in cache
+        // Check if dirty first => writeback
+        if (block->dirty) {
+            // Write back to memory
+            int valid_bytes = block->num_valid();
+            // stats->bytes_transferred += (1 << size.B);
+            stats->bytes_transferred += valid_bytes;
+            stats->write_backs++;
+        }
+
+        // Read needed block from memory and write into cache
+        // TODO: check if 2 * bytes required
+        // stats->bytes_transferred += (1 << size.B);
     }
 
-    // Read needed block from memory and write into cache
-    // TODO: check if 2 * bytes required
-    block->replace(tag);
-    stats->bytes_transferred += (1 << size.B);
+    // TODO: false vs true for replace all??
+    block->replace(tag, false);
+    
+    return block;
+}
+
+void Cache::lru_push(u64 tag, u64 index) {
+    if (ct == DIRECT_MAPPED)
+        return;
+
+    int idx = -1;
+    int limit;
+    int stack_size = 0;
+
+    if (ct == SET_ASSOC) {
+        // For SA, check set-local LRU
+        auto stack = this->lru[index];
+        stack_size = stack.size();
+
+        for (int i = 0; i < stack_size; i++) {
+            // Tag present in LRU
+            if (stack[i] == tag) {
+                idx = i;
+                break;
+            }
+        }
+    } else {
+        // In case of FA cache
+        // Need to adapt 2D vector to hold single lru
+
+        // Any time a push happens, increment size of LRU
+        lru_size = lru_size + 1;
+        if (lru_size > lru.size())
+            lru_size = lru.size();
+        
+        // First, find tag
+        stack_size = this->lru_size;
+
+        for (int i = 0; i < stack_size; i++) {
+            if (lru[i][0] == tag) {
+                idx = i;
+                break;
+            }
+        }
+    }
+
+    // Tag already at top of stack
+    if (idx == 0)
+        return;
+
+    if (idx != -1) {
+        // Tag found => Repush
+        // i.e., rotate until position of tag
+        limit = idx;
+    } else {
+        // Simple push
+        // Rotate right until the end, throw away last elem
+        idx = 0;
+        limit = stack_size-1;
+    }
+
+    u64 temp;
+
+    if (ct == SET_ASSOC) {
+        // Need reference to commit changes to original copy!
+        auto& stack = lru[index];
+        
+        temp = stack[idx];
+
+        for (int i = limit; i > 0; i--)
+            stack[i+1] = stack[i];
+
+        if (idx == 0)
+            stack[0] = tag;
+        else
+            stack[0] = temp;
+    } else {
+        // Leverage 2nd dimension for FA cache
+        temp = lru[idx][0];
+
+        for (int i = limit; i > 0; i--)
+            lru[i+1][0] = lru[i][0];
+
+        if (idx == 0)
+            lru[0][0] = tag;
+        else
+            lru[0][0] = temp;
+    }
+}
+
+u64 Cache::lru_get(u64 index) {
+    if (ct == DIRECT_MAPPED)
+        return 0; // Error state
+        
+    // Get LRU tag (last element in stack)
+    if (ct == SET_ASSOC) {
+        auto stack = this->lru[index];
+        return stack.back();
+    } else {
+        auto& last = this->lru[lru_size];
+        return last[0];
+    }
 }

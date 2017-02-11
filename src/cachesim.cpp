@@ -17,8 +17,35 @@ void exit_on_error(std::string msg) {
     exit(EXIT_FAILURE);
 }
 
+std::string cache_result_status(CacheResult cr) {
+    std::string msg;
+    
+    switch (cr) {
+        case READ_HIT:
+            msg = "Read hit";
+            break;
+        case READ_MISS:
+            msg = "Read miss";
+            break;
+        case READ_SB_MISS:
+            msg = "Read subblock miss";
+            break;
+        case WRITE_HIT:
+            msg = "Write hit";
+            break;
+        case WRITE_MISS:
+            msg = "Write miss";
+            break;
+        default:
+            msg = "Unknown";
+    }
+
+    return msg;
+}
+
 void print_statistics(cache_stats_t* p_stats) {
-    printf("Cache Statistics\n");
+    printf("\nCache Statistics\n");
+    printf("================\n");
     printf("Accesses: %" PRIu64 "\n", p_stats->accesses);
     printf("Reads: %" PRIu64 "\n", p_stats->reads);
     printf("Read misses: %" PRIu64 "\n", p_stats->read_misses);
@@ -151,38 +178,44 @@ int main(int argc, char **argv) {
     // Variables for formatting trace input
     char mode;
     u64 address;
-    bool hit;
 
     std::cout << L1.size.C << " " << L1.size.B << " " << L1.index_mask << std::endl;
 
     // Core simulation loop
     while (*fs >> mode >> std::hex >> address) {
-        std::cout << mode << " " << std::hex << address << std::endl;
+        CacheResult result;
 
         switch (mode) {
             case 'r':
             case 'R':
-                hit = L1.read(address);
-                if (hit)
-                    std::cout << "Hit: " << std::hex << address << std::endl;
+                result = L1.read(address);
                 break;
             case 'w':
             case 'W':
-                L1.write(address);
+                result = L1.write(address);
                 break;
             default:
                 exit_on_error("Invalid input file format");
         }
+
+        // std::string msg = cache_result_status(result);
+
+        // std::cout << mode << " " << std::hex << address;
+        // std::cout << " " << msg << std::endl;
     }
 
     // Print some stats
-    std::cout << std::dec << std::endl << "Stats" << std::endl;
-    std::cout << "=====" << std::endl;
-    std::cout << "Reads: " << stats.reads << std::endl;
-    std::cout << "Read Misses: " << stats.read_misses << std::endl;
-    std::cout << "Bytes Xferred: " << stats.bytes_transferred << std::endl;
+    // std::cout << std::dec << std::endl << "Stats" << std::endl;
+    // std::cout << "=====" << std::endl;
+    // std::cout << "Reads: " << stats.reads << std::endl;
+    // std::cout << "Read Misses: " << stats.read_misses << std::endl;
+    // std::cout << "Bytes Xferred: " << stats.bytes_transferred << std::endl;
 
-    // print_statistics(&stats);
+    stats.misses = stats.read_misses + stats.write_misses + stats.subblock_misses;
+    stats.miss_rate = static_cast<double>(stats.misses) / stats.accesses;
+    stats.avg_access_time = stats.hit_time + stats.miss_rate * stats.miss_penalty;
+
+    print_statistics(&stats);
 
     return 0;
 }
