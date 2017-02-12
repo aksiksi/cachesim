@@ -69,7 +69,7 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
     for (int i = 0; i < rows; i++)
         lru.push_back(std::make_shared<LRU>());
 
-    #ifdef DEBUG
+    #if DEBUG
         std::cout << "Tag mask: " << std::hex << tag_mask << std::endl;
         std::cout << "Index mask: " << index_mask << std::endl;
         std::cout << "Offset mask: " << offset_mask << std::dec << std::endl;

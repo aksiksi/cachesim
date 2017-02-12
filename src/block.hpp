@@ -35,8 +35,10 @@ public:
     int write_many(u64 offset);
 
     void replace(u64 tag, bool full);
-    
+
+    // Used for writeback
     int num_valid();
+
     // Count num invalid starting from offset
     int num_invalid(u64 offset);
 

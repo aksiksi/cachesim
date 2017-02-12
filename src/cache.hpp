@@ -7,7 +7,7 @@
 #include "cachesim.hpp"
 #include "block.hpp"
 
-#define DEBUG true
+#define DEBUG false
 
 struct CacheSize {
     u64 C, B, S, K, N;
