@@ -46,7 +46,7 @@ public:
     bool write(u64 addr);
 
 private:
-    inline int get_offset(u64 addr) {
+    inline u64 get_offset(u64 addr) {
         return addr & offset_mask;
     }
 
@@ -62,7 +62,6 @@ public:
     u64 pop();
 private:
     std::deque<u64> stack;
-    std::size_t size = 0;
 };
 
 /*
@@ -70,9 +69,15 @@ private:
 */
 class Cache {
 public:
+    Cache(CacheSize size, CacheType ct, cache_stats_t* cs);
+
+    CacheResult read(u64 addr);
+    CacheResult write(u64 addr);
+
+private:
+    u64 tag_mask = 0, index_mask = 0, offset_mask = 0;
     CacheSize size;
     CacheType ct;
-    u64 tag_mask = 0, index_mask = 0, offset_mask = 0;
 
     // Emulates cache: stores tag/idx -> block mapping
     std::vector<std::vector<std::shared_ptr<Block>>> cache;
@@ -81,24 +86,16 @@ public:
     cache_stats_t* stats;
 
     // LRU stack
-    // 2D vector of tags
-//    std::vector<std::vector<u64>> lru;
     std::vector<std::shared_ptr<LRU>> lru;
-    std::size_t lru_size = 0; // For FA cache ONLY
 
-    Cache(CacheSize size, CacheType ct, cache_stats_t* cs);
-
-    CacheResult read(u64 addr);
-    CacheResult write(u64 addr);
-
-private:
     std::shared_ptr<Block> find_victim(u64 index);
     std::shared_ptr<Block> evict(u64 tag, u64 index);
 
     // LRU methods
     void lru_push(u64 tag, u64 index);
     u64 lru_get(u64 index);
-    
+
+    // Cache index extraction
     inline u64 get_tag(u64 addr) {
         return addr & tag_mask;
     }
@@ -107,22 +104,8 @@ private:
         return (addr & index_mask) >> size.B;
     }
 
-    inline int get_offset(u64 addr) {
+    inline u64 get_offset(u64 addr) {
         return addr & offset_mask;
-    }
-
-    inline u64 compute_key(u64 addr) {
-        if (ct == CacheType::FULLY_ASSOC)
-            return get_tag(addr);
-        else
-            return get_index(addr);
-    }
-
-    inline bool is_cache_full() {
-        if (cache.size() == (1 << size.C))
-            return true;
-        
-        return false;
     }
 };
 

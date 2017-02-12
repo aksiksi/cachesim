@@ -178,8 +178,6 @@ int main(int argc, char **argv) {
     char mode;
     u64 address;
 
-    std::cout << L1.size.C << " " << L1.size.B << " " << L1.index_mask << std::endl;
-
     // Core simulation loop
     while (*fs >> mode >> std::hex >> address) {
         CacheResult result;
@@ -210,8 +208,10 @@ int main(int argc, char **argv) {
     // std::cout << "Read Misses: " << stats.read_misses << std::endl;
     // std::cout << "Bytes Xferred: " << stats.bytes_transferred << std::endl;
 
-    stats.misses = stats.read_misses + stats.write_misses + stats.subblock_misses;
-    stats.miss_rate = static_cast<double>(stats.misses) / stats.accesses;
+    stats.write_misses_combined = stats.write_misses;
+    stats.read_misses_combined = stats.read_misses;
+    stats.misses = stats.read_misses + stats.write_misses;
+    stats.miss_rate = static_cast<double>(stats.misses + stats.subblock_misses) / stats.accesses;
     stats.avg_access_time = stats.hit_time + stats.miss_rate * stats.miss_penalty;
 
     print_statistics(&stats);

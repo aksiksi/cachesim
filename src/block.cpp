@@ -8,6 +8,7 @@ Block::Block(u64 B, u64 K, bool sb) : B(B), K(K), sb(sb) {
     
     // Number of subblocks = 2^B / 2^K
     n = (1 << (B-K));
+
     valid.resize(n, 0);
     std::fill(valid.begin(), valid.end(), 0);
 }
@@ -19,23 +20,23 @@ bool Block::read(u64 offset) {
 
     int idx = find_idx(offset);
     
-    if (idx > n)
+    if (idx >= n)
         exit_on_error("Subblock index out of range.");
 
-    if (valid[idx] == 1)
+    if (valid[idx])
         return true;
     
     return false;
 }
 
-bool Block::write(u64 subblock) {
+bool Block::write(int subblock) {
     if (!sb) return false;
     
-    if (subblock > n)
+    if (subblock >= n)
         exit_on_error("Subblock index out of range.");
 
     // Only fetch invalid subblocks
-    if (valid[subblock] == 0) {
+    if (!valid[subblock]) {
         valid[subblock] = 1;
         return true;
     }
@@ -62,7 +63,7 @@ int Block::write_many(u64 offset) {
     return c * (1 << K);
 }
 
-void Block::replace(u64 tag, bool full) {    
+void Block::replace(u64 tag, bool full) {
     this->tag = tag;
     this->dirty = false;
 
@@ -78,7 +79,7 @@ int Block::num_valid() {
     int c = 0;
 
     for (int i = 0; i < n; i++)
-        if (valid[i] == 1)
+        if (valid[i])
             c++;
     
     return c;
@@ -99,6 +100,10 @@ int Block::find_idx(u64 offset) {
      // Figure out which subblock is being requested
     float max_offset = (1 << B) - 1;
     float ratio = offset / max_offset;
-    int idx = static_cast<int>(ratio * (n-1));
+    int idx = static_cast<int>(ratio * n);
+
+    if (idx == n)
+        idx = n-1;
+
     return idx;
 }

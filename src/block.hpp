@@ -29,7 +29,7 @@ public:
     bool read(u64 offset);
     
     // Write a single sublock
-    bool write(u64 offset);
+    bool write(int subblock);
 
     // Write multiple subblocks (prefetch)
     int write_many(u64 offset);
