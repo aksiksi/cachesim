@@ -2,6 +2,7 @@
 #define CACHE_H
 
 #include <vector>
+#include <deque>
 
 #include "cachesim.hpp"
 #include "block.hpp"
@@ -54,6 +55,16 @@ private:
     }
 };
 
+class LRU {
+public:
+    LRU() {}
+    void push(u64 tag);
+    u64 pop();
+private:
+    std::deque<u64> stack;
+    std::size_t size = 0;
+};
+
 /*
     Maintains state for a single cache of any type.
 */
@@ -71,7 +82,8 @@ public:
 
     // LRU stack
     // 2D vector of tags
-    std::vector<std::vector<u64>> lru;
+//    std::vector<std::vector<u64>> lru;
+    std::vector<std::shared_ptr<LRU>> lru;
     std::size_t lru_size = 0; // For FA cache ONLY
 
     Cache(CacheSize size, CacheType ct, cache_stats_t* cs);
@@ -80,7 +92,7 @@ public:
     CacheResult write(u64 addr);
 
 private:
-    std::shared_ptr<Block> find_victim(u64 tag, u64 index);
+    std::shared_ptr<Block> find_victim(u64 index);
     std::shared_ptr<Block> evict(u64 tag, u64 index);
 
     // LRU methods

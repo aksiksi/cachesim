@@ -3,6 +3,34 @@
 
 #include "cache.hpp"
 
+void LRU::push(u64 tag) {
+    bool found = false;
+
+    // Check if tag already in LRU
+    for (u64 t: stack) {
+        if (t == tag) {
+            found = true;
+            break;
+        }
+    }
+
+    // Remove tag from stack
+    if (found)
+        stack.erase(std::remove(stack.begin(), stack.end(), tag), stack.end());
+    else
+        size++;
+
+    // Do a push
+    stack.push_front(tag);
+}
+
+u64 LRU::pop() {
+    u64 tag = stack.back();
+    stack.pop_back();
+    size--;
+    return tag;
+}
+
 Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) : 
             size(size), ct(ct), stats(cs) {
     u64 C = size.C, B = size.B, S = size.S, K = size.K;
@@ -42,7 +70,9 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
             cache[i][j] = std::shared_ptr<Block>(new Block(B, K, sb));
 
     // Init lru
-    lru.resize(rows, std::vector<u64>(cols, 0));
+//    lru.resize(rows, std::vector<u64>(cols, 0));
+    for (int i = 0; i < rows; i++)
+        lru.push_back(std::make_shared<LRU>());
 
     #ifdef DEBUG
         std::cout << "Tag mask: " << std::hex << tag_mask << std::endl;
@@ -209,7 +239,7 @@ CacheResult Cache::write(u64 addr) {
 }
 
 std::shared_ptr<Block>
-Cache::find_victim(u64 tag, u64 index) {
+Cache::find_victim(u64 index) {
     // Figure out candidate block for cache eviction
     // IF there are empty blocks, return first such one as a "victim"
     std::shared_ptr<Block> block;
@@ -261,7 +291,7 @@ Cache::evict(u64 tag, u64 index) {
     // Find block to use in cache
     // If block selected is dirty, write it to memory
     // Then replace it
-    auto block = find_victim(tag, index);
+    auto block = find_victim(index);
 
     // Empty block => just ignore the eviction
     if (block->tag != 0) {
@@ -273,13 +303,8 @@ Cache::evict(u64 tag, u64 index) {
             stats->bytes_transferred += valid * (1 << size.K);
             stats->write_backs++;
         }
-
-        // Read needed block from memory and write into cache
-        // TODO: check if 2 * bytes required
-        // stats->bytes_transferred += (1 << size.B);
     }
 
-    // TODO: false vs true for replace all??
     block->replace(tag, false);
     
     return block;
@@ -288,86 +313,93 @@ Cache::evict(u64 tag, u64 index) {
 void Cache::lru_push(u64 tag, u64 index) {
     if (ct == DIRECT_MAPPED)
         return;
-
-    int idx = -1;
-    int limit;
-    int stack_size = 0;
-
-    if (ct == SET_ASSOC) {
-        // For SA, check set-local LRU
-        auto& stack = this->lru[index];
-        stack_size = stack.size();
-
-        for (int i = 0; i < stack_size; i++) {
-            // Tag present in LRU
-            if (stack[i] == tag) {
-                idx = i;
-                break;
-            }
-        }
+    else if (ct == FULLY_ASSOC) {
+        auto& l = lru[0];
+        l->push(tag);
     } else {
-        // In case of FA cache
-        // Need to adapt 2D vector to hold single lru
-
-        // Any time a push happens, increment size of LRU
-        lru_size = lru_size + 1;
-        if (lru_size > lru.size())
-            lru_size = lru.size();
-        
-        // First, find tag
-        stack_size = this->lru_size;
-
-        for (int i = 0; i < stack_size; i++) {
-            if (lru[i][0] == tag) {
-                idx = i;
-                break;
-            }
-        }
+        auto&l = lru[index];
+        l->push(tag);
     }
-
-    // Tag already at top of stack
-    if (idx == 0)
-        return;
-
-    if (idx != -1) {
-        // Tag found => Repush
-        // i.e., rotate until position of tag
-        limit = idx;
-    } else {
-        // Simple push
-        // Rotate right until the end, throw away last elem
-        idx = 0;
-        limit = stack_size-1;
-    }
-
-    u64 temp;
-
-    if (ct == SET_ASSOC) {
-        // Need reference to commit changes to original copy!
-        auto& stack = lru[index];
-        
-        temp = stack[idx];
-
-        // Right shift of elements until `limit`
-        for (int i = limit-1; i >= 0; i--)
-            stack[i+1] = stack[i];
-        
-        if (idx == 0)
-            stack[0] = tag;
-        else
-            stack[0] = temp;
-    } else {
-        // Leverage 2nd dimension for FA cache
-        temp = lru[idx][0];
-
-        for (int i = limit-1; i >= 0; i--)
-            lru[i+1][0] = lru[i][0];
-        
-        if (idx == 0)
-            lru[0][0] = tag;
-        else
-            lru[0][0] = temp;
-    }
+//
+//    int idx = -1;
+//    int limit;
+//    int stack_size = 0;
+//
+//    if (ct == SET_ASSOC) {
+//        // For SA, check set-local LRU
+//        auto& stack = this->lru[index];
+//        stack_size = stack.size();
+//
+//        for (int i = 0; i < stack_size; i++) {
+//            // Tag present in LRU
+//            if (stack[i] == tag) {
+//                idx = i;
+//                break;
+//            }
+//        }
+//    } else {
+//        // In case of FA cache
+//        // Need to adapt 2D vector to hold single lru
+//
+//        // Any time a push happens, increment size of LRU
+//        lru_size = lru_size + 1;
+//        if (lru_size > lru.size())
+//            lru_size = lru.size();
+//
+//        // First, find tag
+//        stack_size = this->lru_size;
+//
+//        for (int i = 0; i < stack_size; i++) {
+//            if (lru[i][0] == tag) {
+//                idx = i;
+//                break;
+//            }
+//        }
+//    }
+//
+//    // Tag already at top of stack
+//    if (idx == 0)
+//        return;
+//
+//    if (idx != -1) {
+//        // Tag found => Repush
+//        // i.e., rotate until position of tag
+//        limit = idx;
+//    } else {
+//        // Simple push
+//        // Rotate right until the end, throw away last elem
+//        idx = 0;
+//        limit = stack_size-1;
+//    }
+//
+//    u64 temp;
+//
+//    if (ct == SET_ASSOC) {
+//        // Need reference to commit changes to original copy!
+//        auto& stack = lru[index];
+//
+//        temp = stack[idx];
+//
+//        // Right shift of elements until `limit`
+//        for (int i = limit-1; i >= 0; i--)
+//            stack[i+1] = stack[i];
+//
+//        if (idx == 0)
+//            stack[0] = tag;
+//        else
+//            stack[0] = temp;
+//    } else {
+//        // Leverage 2nd dimension for FA cache
+//        temp = lru[idx][0];
+//
+//        for (int i = limit-1; i >= 0; i--)
+//            lru[i+1][0] = lru[i][0];
+//
+//        if (idx == 0)
+//            lru[0][0] = tag;
+//        else
+//            lru[0][0] = temp;
+//    }
 }
 
 u64 Cache::lru_get(u64 index) {
@@ -376,11 +408,14 @@ u64 Cache::lru_get(u64 index) {
         
     // Get LRU tag (last element in stack)
     if (ct == SET_ASSOC) {
-        auto& stack = this->lru[index];
-//        std::cout << "GET: " << stack.back() << std::endl;
-        return stack.back();
+        auto& l = lru[index];
+        return l->pop();
+//        auto& stack = this->lru[index];
+//        return stack.back();
     } else {
-        auto& last = this->lru[lru_size];
-        return last[0];
+        auto& l = lru[0];
+        return l->pop();
+//        auto& last = this->lru[lru_size];
+//        return last[0];
     }
 }

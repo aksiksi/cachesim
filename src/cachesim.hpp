@@ -6,7 +6,7 @@
 
 typedef uint64_t u64;
 
-void exit_on_error(std::string msg);
+void exit_on_error(const std::string msg);
 
 struct cache_stats_t {
     uint64_t accesses;

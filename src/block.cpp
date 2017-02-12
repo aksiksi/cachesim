@@ -69,6 +69,8 @@ void Block::replace(u64 tag, bool full) {
     // Full block replace => all valid
     if (full)
         std::fill(valid.begin(), valid.end(), 1);
+    else
+        std::fill(valid.begin(), valid.end(), 0);
 }
 
 int Block::num_valid() {
