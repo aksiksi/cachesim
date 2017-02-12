@@ -81,7 +81,7 @@ CacheResult Cache::read(u64 addr) {
 
     if (ct == FULLY_ASSOC) {
         // FA cache -> search for tag directly
-        for (auto each: cache) {
+        for (auto& each: cache) {
             auto b = each[0];
 
             // Check for tag
@@ -93,16 +93,16 @@ CacheResult Cache::read(u64 addr) {
         }
     } else if (ct == DIRECT_MAPPED) {
         // Retrieve the "only" possible block
-        auto b = cache[index][0];
+        block = cache[index][0];
 
-        if (b->tag == tag)
+        if (block->tag == tag)
             hit = true;
     } else {
         // Set associative cache
         // Retrieve set based on index
-        auto set = cache[index];
+        auto& set = cache[index];
 
-        for (auto b: set) {
+        for (auto& b: set) {
             if (b->tag == tag) {
                 hit = true;
                 block = b;
@@ -117,13 +117,13 @@ CacheResult Cache::read(u64 addr) {
             return READ_HIT;
         // Subblock miss! -> Perform prefetch
         else {
-            stats->subblock_misses++;
-
             // Only count invalid subblocks for prefetch
             int num_invalid = block->num_invalid(offset);
-            stats->bytes_transferred += num_invalid;
+            stats->bytes_transferred += num_invalid * (1 << size.K);
 
             block->write_many(offset);
+
+            stats->subblock_misses++;
         
             return READ_SB_MISS;
         }
@@ -149,7 +149,7 @@ CacheResult Cache::write(u64 addr) {
     u64 index = get_index(addr);
     u64 offset = get_offset(addr);
 
-    // lru_push(tag, index);
+    lru_push(tag, index);
 
     stats->accesses++;
     stats->writes++;
@@ -158,7 +158,7 @@ CacheResult Cache::write(u64 addr) {
     std::shared_ptr<Block> block;
 
     if (ct == FULLY_ASSOC) {
-        for (auto each: cache) {
+        for (auto& each: cache) {
             auto b = each[0];
 
             // Check for tag in cache
@@ -169,14 +169,14 @@ CacheResult Cache::write(u64 addr) {
             }
         }
     } else if (ct == DIRECT_MAPPED) {
-        auto b = cache[index][0];
+        block = cache[index][0];
         
-        if (b->tag == tag)
+        if (block->tag == tag)
             hit = true;
     } else {
-        auto set = cache[index];
+        auto& set = cache[index];
 
-        for (auto b: set) {
+        for (auto& b: set) {
             if (b->tag == tag) {
                 hit = true;
                 block = b;
@@ -234,7 +234,7 @@ Cache::find_victim(u64 tag, u64 index) {
     } else if (ct == DIRECT_MAPPED) {
         block = cache[index][0];
     } else {
-        auto set = cache[index];
+        auto& set = cache[index];
 
         // Look for empty block first
         for (int i = 0; i < set.size(); i++) {
@@ -268,10 +268,9 @@ Cache::evict(u64 tag, u64 index) {
         // Replace the block in cache
         // Check if dirty first => writeback
         if (block->dirty) {
-            // Write back to memory
-            // int valid_bytes = block->num_valid();
-            // stats->bytes_transferred += (1 << size.B);
-            stats->bytes_transferred += (1 << size.B); // TRY
+            // Write back valid subblocks to memory
+            int valid = block->num_valid();
+            stats->bytes_transferred += valid * (1 << size.K);
             stats->write_backs++;
         }
 
@@ -296,7 +295,7 @@ void Cache::lru_push(u64 tag, u64 index) {
 
     if (ct == SET_ASSOC) {
         // For SA, check set-local LRU
-        auto stack = this->lru[index];
+        auto& stack = this->lru[index];
         stack_size = stack.size();
 
         for (int i = 0; i < stack_size; i++) {
@@ -349,9 +348,10 @@ void Cache::lru_push(u64 tag, u64 index) {
         
         temp = stack[idx];
 
-        for (int i = limit; i > 0; i--)
+        // Right shift of elements until `limit`
+        for (int i = limit-1; i >= 0; i--)
             stack[i+1] = stack[i];
-
+        
         if (idx == 0)
             stack[0] = tag;
         else
@@ -360,9 +360,9 @@ void Cache::lru_push(u64 tag, u64 index) {
         // Leverage 2nd dimension for FA cache
         temp = lru[idx][0];
 
-        for (int i = limit; i > 0; i--)
+        for (int i = limit-1; i >= 0; i--)
             lru[i+1][0] = lru[i][0];
-
+        
         if (idx == 0)
             lru[0][0] = tag;
         else
@@ -376,7 +376,8 @@ u64 Cache::lru_get(u64 index) {
         
     // Get LRU tag (last element in stack)
     if (ct == SET_ASSOC) {
-        auto stack = this->lru[index];
+        auto& stack = this->lru[index];
+//        std::cout << "GET: " << stack.back() << std::endl;
         return stack.back();
     } else {
         auto& last = this->lru[lru_size];

@@ -72,7 +72,7 @@ public:
     // LRU stack
     // 2D vector of tags
     std::vector<std::vector<u64>> lru;
-    std::size_t lru_size = 0; // For FA cache only
+    std::size_t lru_size = 0; // For FA cache ONLY
 
     Cache(CacheSize size, CacheType ct, cache_stats_t* cs);
 

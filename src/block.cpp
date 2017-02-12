@@ -1,12 +1,14 @@
 #include "block.hpp"
 
+#include <iostream>
+
 Block::Block(u64 B, u64 K, bool sb) : B(B), K(K), sb(sb) {
     // Skip init if no subblocking
     if (!sb) return;
     
     // Number of subblocks = 2^B / 2^K
     n = (1 << (B-K));
-    valid.reserve(n);
+    valid.resize(n, 0);
     std::fill(valid.begin(), valid.end(), 0);
 }
 
@@ -42,15 +44,14 @@ bool Block::write(u64 subblock) {
 }
 
 // Write multiple subblocks (prefetch)
-// Returns number of bytes written
+// Returns number of blocks written
 int Block::write_many(u64 offset) {
     // If no subblocking, always write entire block
     if (!sb) return (1 << B);
     
-    int c = 0;
-    
     // Figure out which subblock is being requested
     int idx = find_idx(offset);
+    int c = 0;
     
     // Iterate through all offsets
     // Only count invalid subblock writes
@@ -58,7 +59,7 @@ int Block::write_many(u64 offset) {
         if (write(idx))
             c++;
 
-    return c;
+    return c * (1 << K);
 }
 
 void Block::replace(u64 tag, bool full) {    
@@ -70,15 +71,8 @@ void Block::replace(u64 tag, bool full) {
         std::fill(valid.begin(), valid.end(), 1);
 }
 
-void Block::empty() {
-    // TODO
-    tag = 0;
-    dirty = false;
-    // Comment out to get correct values -- see TSquare
-    // std::fill(valid.begin(), valid.end(), 0);
-}
-
 int Block::num_valid() {
+    // Returns number of valid subblocks
     int c = 0;
 
     for (int i = 0; i < n; i++)
@@ -102,6 +96,7 @@ int Block::num_invalid(u64 offset) {
 int Block::find_idx(u64 offset) {
      // Figure out which subblock is being requested
     float max_offset = (1 << B) - 1;
-    int idx = (int)((offset / max_offset) * (n-1));
+    float ratio = offset / max_offset;
+    int idx = static_cast<int>(ratio * (n-1));
     return idx;
 }

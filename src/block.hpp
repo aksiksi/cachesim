@@ -12,15 +12,14 @@ class Block {
 public:
     // Stores valid bits for each subblock
     std::vector<int> valid;
+    u64 tag = 0;
+    bool dirty = false;
     
     int n; // Number of subblocks
     u64 B; // Block size
-    u64 K; // Number of bytes / subblock
+    u64 K; // Number of bytes per subblock
 
     bool sb; // Enable/disable subblocking
-
-    u64 tag = 0;
-    bool dirty = false;
 
     // Init subblocks
     // sb = true -> subblocking enabled
@@ -36,9 +35,8 @@ public:
     int write_many(u64 offset);
 
     void replace(u64 tag, bool full);
-    void empty();
-    int num_valid();
     
+    int num_valid();
     // Count num invalid starting from offset
     int num_invalid(u64 offset);
 
