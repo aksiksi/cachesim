@@ -1,20 +1,19 @@
 CC=g++
 CFLAGS=-c -std=c++11 -g -Wall
-OUT=bin
 
-all: cachesim
+all: cachesim clean
 
 cachesim: block.o cachesim.o cache.o
-	$(CC) $(OUT)/*.o -o cachesim
+	$(CC) *.o -o cachesim
 
 cachesim.o: src/cachesim.cpp
-	$(CC) $(CFLAGS) src/cachesim.cpp -o $(OUT)/cachesim.o
+	$(CC) $(CFLAGS) src/cachesim.cpp -o cachesim.o
 
 cache.o: src/cache.cpp
-	$(CC) $(CFLAGS) src/cache.cpp -o $(OUT)/cache.o
+	$(CC) $(CFLAGS) src/cache.cpp -o cache.o
 
 block.o: src/block.cpp
-	$(CC) $(CFLAGS) src/block.cpp -o $(OUT)/block.o
+	$(CC) $(CFLAGS) src/block.cpp -o block.o
 
 clean:
-	rm $(OUT)/*.o
+	rm -f *.o
