@@ -125,13 +125,12 @@ void parse_args(int argc, char **argv, inputargs_t& args) {
                 break;
             case 'i':
                 // Create a pointer for persistence
+                // Then open the file in read mode
                 std::ifstream *ifs = new std::ifstream();
-
-                try {
-                    ifs->open(optarg);
-                } catch (std::exception& e) {
-                    exit_on_error("Invalid input file.");
-                }
+                ifs->open(optarg);
+                
+                if (!ifs->good())
+                    exit_on_error("File not found.");
 
                 args.trace_file = ifs;
         }
