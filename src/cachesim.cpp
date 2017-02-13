@@ -126,13 +126,17 @@ void parse_args(int argc, char **argv, inputargs_t& args) {
             case 'i':
                 // Create a pointer for persistence
                 std::ifstream *ifs = new std::ifstream();
-                ifs->open(optarg);
+
+                try {
+                    ifs->open(optarg);
+                } catch (std::exception& e) {
+                    exit_on_error("Invalid input file.");
+                }
+
                 args.trace_file = ifs;
-                break;
         }
         
         if (c != 'i')
-            // Store 2^value for simplicity
             *arg = static_cast<uint64_t>(num);
     }
 
@@ -157,6 +161,7 @@ int main(int argc, char **argv) {
 
     // Create smart ptr to heap allocated `istream`
     // (deleted at end of scope)
+    // Smart!
     std::unique_ptr<std::istream> fs (args.trace_file);
 
     CacheSize cache_size = {
@@ -168,6 +173,7 @@ int main(int argc, char **argv) {
     };
 
     // Find cache type (DM, FA, or SA)
+    // Exits if invalid parameters
     CacheType ct = find_cache_type(cache_size);
 
     // Create L1 cache with given size, type
@@ -194,19 +200,7 @@ int main(int argc, char **argv) {
             default:
                 exit_on_error("Invalid input file format");
         }
-
-        // std::string msg = cache_result_status(result);
-
-        // std::cout << mode << " " << std::hex << address;
-        // std::cout << " " << msg << std::endl;
     }
-
-    // Print some stats
-    // std::cout << std::dec << std::endl << "Stats" << std::endl;
-    // std::cout << "=====" << std::endl;
-    // std::cout << "Reads: " << stats.reads << std::endl;
-    // std::cout << "Read Misses: " << stats.read_misses << std::endl;
-    // std::cout << "Bytes Xferred: " << stats.bytes_transferred << std::endl;
 
     stats.write_misses_combined = stats.write_misses;
     stats.read_misses_combined = stats.read_misses;
