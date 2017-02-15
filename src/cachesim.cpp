@@ -101,7 +101,7 @@ void parse_args(int argc, char **argv, inputargs_t& args) {
     args.S = DEFAULT_S;
     args.V = DEFAULT_V;
     args.K = DEFAULT_K;
-    args.trace_file = &std::cin; // Stream defaults to stdin
+    args.trace_file = nullptr;
 
     while ((c = getopt(argc, argv, ALLOWED_ARGS)) != -1) {
         if (c == 'C' || c == 'B' || c == 'S' || c == 'V' || c == 'K')
@@ -153,15 +153,23 @@ int main(int argc, char **argv) {
 
     // Parse command line args
     // Info stored in global args `struct`
+    // Return if file input
     parse_args(argc, argv, args);
 
     // Create cache_stats `struct`
     cache_stats_t stats = {};
 
-    // Create smart ptr to heap allocated `istream`
-    // (deleted at end of scope)
-    // Smart!
-    std::unique_ptr<std::istream> fs (args.trace_file);
+    // Set fs to either std::cin or file
+    // depending on value of trace_file
+    std::istream *fs;
+    bool file = false;
+
+    if (args.trace_file == nullptr)
+        fs = &std::cin;
+    else {
+        fs = args.trace_file;
+        file = true;
+    }
 
     CacheSize cache_size = {
         args.C,
@@ -208,6 +216,10 @@ int main(int argc, char **argv) {
     stats.avg_access_time = stats.hit_time + stats.miss_rate * stats.miss_penalty;
 
     print_statistics(&stats);
+
+    // Free file stream (if applicable)
+    if (file)
+        delete fs;
 
     return 0;
 }
