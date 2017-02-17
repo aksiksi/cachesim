@@ -235,6 +235,8 @@ CacheResult Cache::write(u64 addr) {
         // Write data to it
         block->write_many(offset);
 
+        // Retrieve block from memory
+        stats->bytes_transferred += (1 << size.B); 
         stats->write_misses++;
 
         cr = WRITE_MISS;
