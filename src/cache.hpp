@@ -6,11 +6,12 @@
 
 #include "cachesim.hpp"
 #include "block.hpp"
+#include "victim.hpp"
 
 #define DEBUG false
 
 struct CacheSize {
-    u64 C, B, S, K, N;
+    u64 C, B, S, K, N, V;
 };
 
 enum CacheType {
@@ -29,32 +30,6 @@ enum CacheResult {
     WRITE_SB_MISS
 };
 
-class VictimCache {
-public:
-    u64 B, V;
-    u64 tag_mask = 0, offset_mask = 0;
-    
-    std::vector<std::vector<std::shared_ptr<Block>>> cache;
-    int rows, cols;
-
-    cache_stats_t* stats;
-
-    VictimCache(u64 B, u64 V);
-
-    bool read(u64 addr);
-
-    bool write(u64 addr);
-
-private:
-    inline u64 get_offset(u64 addr) {
-        return addr & offset_mask;
-    }
-
-    inline u64 get_tag(u64 addr) {
-        return addr & tag_mask;
-    }
-};
-
 class LRU {
 public:
     LRU() {}
@@ -69,7 +44,8 @@ private:
 */
 class Cache {
 public:
-    Cache(CacheSize size, CacheType ct, cache_stats_t* cs);
+    Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc);
+    ~Cache();
 
     CacheResult read(u64 addr);
     CacheResult write(u64 addr);
@@ -85,15 +61,17 @@ private:
 
     cache_stats_t* stats;
 
-    // LRU stack
-    std::vector<std::shared_ptr<LRU>> lru;
-
     std::shared_ptr<Block> find_victim(u64 index);
     std::shared_ptr<Block> evict(u64 tag, u64 index);
 
-    // LRU methods
+    // LRU stack
+    std::vector<std::shared_ptr<LRU>> lru;
     void lru_push(u64 tag, u64 index);
     u64 lru_get(u64 index);
+
+    // Victim cache
+    bool vc = false;
+    VictimCache *victim_cache;
 
     // Cache index extraction
     inline u64 get_tag(u64 addr) {

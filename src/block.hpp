@@ -12,7 +12,7 @@ class Block {
 public:
     // Stores valid bits for each subblock
     std::vector<int> valid;
-    u64 tag = 0;
+    u64 tag = 0, index = 0;
     bool dirty = false;
     
     int n; // Number of subblocks
@@ -34,7 +34,7 @@ public:
     // Write multiple subblocks (prefetch)
     int write_many(u64 offset);
 
-    void replace(u64 tag, bool full);
+    void replace(u64 tag, u64 index, bool full);
 
     // Used for writeback
     int num_valid();

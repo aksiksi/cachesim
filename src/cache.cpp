@@ -28,9 +28,9 @@ u64 LRU::pop() {
     return tag;
 }
 
-Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) : 
-            size(size), ct(ct), stats(cs) {
-    u64 C = size.C, B = size.B, S = size.S, K = size.K;
+Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc) : 
+            size(size), ct(ct), stats(cs), vc(vc) {
+    u64 C = size.C, B = size.B, S = size.S, K = size.K, V = size.V;
     
     offset_mask = static_cast<u64>(1 << B) - 1;
     index_mask = static_cast<u64>((1 << (C-B-S)) - 1) << B;
@@ -69,6 +69,10 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
     for (int i = 0; i < rows; i++)
         lru.push_back(std::make_shared<LRU>());
 
+    // Init VC
+    if (this->vc)
+        victim_cache = new VictimCache(V);
+
     #if DEBUG
         std::cout << "Tag mask: " << std::hex << tag_mask << std::endl;
         std::cout << "Index mask: " << index_mask << std::endl;
@@ -88,6 +92,10 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
 
     stats->hit_time = 2 + 0.1 * (1 << S);
     stats->miss_penalty = 100;
+}
+
+Cache::~Cache() {
+    delete victim_cache;
 }
 
 CacheResult Cache::read(u64 addr) {
@@ -235,8 +243,6 @@ CacheResult Cache::write(u64 addr) {
         // Write data to it
         block->write_many(offset);
 
-        // Retrieve block from memory
-        stats->bytes_transferred += (1 << size.B); 
         stats->write_misses++;
 
         cr = WRITE_MISS;
@@ -267,7 +273,7 @@ Cache::evict(u64 tag, u64 index) {
         }
     }
 
-    block->replace(tag, false);
+    block->replace(tag, index, false);
 
     return block;
 }

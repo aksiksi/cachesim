@@ -63,9 +63,10 @@ int Block::write_many(u64 offset) {
     return c * (1 << K);
 }
 
-void Block::replace(u64 tag, bool full) {
+void Block::replace(u64 tag, u64 index, bool full) {
     this->tag = tag;
-    this->dirty = false;
+    this->index = index;
+    this->dirty = false; 
 
     // Full block replace => all valid
     if (full)

@@ -176,7 +176,8 @@ int main(int argc, char **argv) {
         args.B,
         args.S,
         args.K,
-        args.N
+        args.N,
+        args.V
     };
 
     // Find cache type (DM, FA, or SA)
@@ -185,7 +186,7 @@ int main(int argc, char **argv) {
 
     // Create L1 cache with given size, type
     // Pass in stats object
-    Cache L1 (cache_size, ct, &stats);
+    Cache L1 (cache_size, ct, &stats, false); // No VC
 
     // Variables for formatting trace input
     char mode;
