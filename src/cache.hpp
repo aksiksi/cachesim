@@ -2,7 +2,7 @@
 #define CACHE_H
 
 #include <vector>
-#include <deque>
+#include <forward_list>
 
 #include "cachesim.hpp"
 #include "block.hpp"
@@ -32,11 +32,18 @@ enum CacheResult {
 
 class LRU {
 public:
-    LRU() {}
+    LRU(int m) : max_size(m) {}
     void push(u64 tag);
     u64 pop();
 private:
-    std::deque<u64> stack;
+    // Using forward_list for efficiency
+    std::forward_list<u64> stack;
+    size_t size = 0; // Current size of LRU
+    int max_size; // Max LRU size
+
+    // Stores the last popped value for case
+    // of eviction push before pop!
+    u64 last_popped = 0;
 };
 
 /*
@@ -71,7 +78,7 @@ private:
 
     // Victim cache
     bool vc = false;
-    VictimCache *victim_cache;
+    VictimCache* victim_cache;
 
     // Cache index extraction
     inline u64 get_tag(u64 addr) {

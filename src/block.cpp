@@ -13,6 +13,15 @@ Block::Block(u64 B, u64 K, bool sb) : B(B), K(K), sb(sb) {
     std::fill(valid.begin(), valid.end(), 0);
 }
 
+Block::Block(const Block& other) {
+    // Copy values to current block
+    K = other.K, B = other.B, sb = other.sb;
+    tag = other.tag, index = other.index;
+    n = (1 << (B-K));
+    dirty = other.dirty;
+    valid = other.valid;
+}
+
 // Read a single subblock
 bool Block::read(u64 offset) {
     // No subblocking = always hit

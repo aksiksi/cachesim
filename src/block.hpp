@@ -21,9 +21,10 @@ public:
 
     bool sb; // Enable/disable subblocking
 
-    // Init subblocks
-    // sb = true -> subblocking enabled
     Block(u64 B, u64 K, bool sb);
+
+    // Copy constructor
+    Block(const Block& other);
 
     // Read a single subblock
     bool read(u64 offset);

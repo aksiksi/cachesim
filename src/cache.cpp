@@ -5,27 +5,60 @@
 
 void LRU::push(u64 tag) {
     bool found = false;
+    int idx = 0;
 
-    // Check if tag already in LRU
-    for (u64 t: stack) {
+    for (auto t: stack) {
         if (t == tag) {
             found = true;
             break;
         }
+
+        idx++;
     }
 
     // Remove tag from stack
-    if (found)
-        stack.erase(std::remove(stack.begin(), stack.end(), tag), stack.end());
+    // 1. Get an iterator to tag before target
+    // 2. Then delete target tag
+    if (found) {
+        auto p = std::next(stack.before_begin(), idx);
+        stack.erase_after(p);
+        size--;
+    }
 
     // Do a push
     stack.push_front(tag);
+    size++;
+
+    if (size > max_size) {
+        // Iterator to before the last element
+        auto it = std::next(stack.before_begin(), size-1);
+
+        // Store ref to last popped
+        last_popped = *std::next(it);
+
+        // Erase the last element
+        stack.erase_after(it);
+        size--;
+    }
 }
 
 u64 LRU::pop() {
-    u64 tag = stack.back();
-    stack.pop_back();
-    return tag;
+    if (size != max_size) {
+        // Pointer to before last element
+        auto it = std::next(stack.before_begin(), size-1);
+
+        // Get value of last element (pop)
+        u64 tag = *std::next(it);
+
+        // Remove last element
+        stack.erase_after(it);
+        size--;
+
+        return tag;
+    } else {
+        // Just return the last popped value (from previous push)
+        return last_popped;
+    }
 }
 
 Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc) : 
@@ -66,8 +99,17 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc) :
             cache[i][j] = std::make_shared<Block>(B, K, sb);
 
     // Init LRU
-    for (int i = 0; i < rows; i++)
-        lru.push_back(std::make_shared<LRU>());
+    int max_size;
+
+    if (ct == FULLY_ASSOC)
+        max_size = rows;
+    else if (ct == SET_ASSOC)
+        max_size = cols;
+
+    if (ct != DIRECT_MAPPED) {
+        for (int i = 0; i < rows; i++)
+            lru.push_back(std::make_shared<LRU>(max_size));
+    }
 
     // Init VC
     if (this->vc)
@@ -95,13 +137,15 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc) :
 }
 
 Cache::~Cache() {
-    delete victim_cache;
+    // Free up VC
+    if (this->vc)
+        delete victim_cache;
 }
 
 CacheResult Cache::read(u64 addr) {
-    u64 tag = get_tag(addr);
-    u64 index = get_index(addr);
-    u64 offset = get_offset(addr);
+    const u64 tag = get_tag(addr);
+    const u64 index = get_index(addr);
+    const u64 offset = get_offset(addr);
 
     // Add access to LRU
     lru_push(tag, index);
@@ -162,16 +206,58 @@ CacheResult Cache::read(u64 addr) {
         }
     } else {
         // Full read miss
-        // Retrieve subblock and prefetch subsequent
         stats->read_misses++;
         
-        // Find suitable victim to evict
-        // Or return first empty block
-        block = evict(tag, index);
+        // Find the victim
+        // tag = 0 if empty block
+        auto victim = find_victim(index);
 
-        // Fetch required subblocks from memory
-        int bytes = block->write_many(offset);
-        stats->bytes_transferred += bytes;
+        // Check VC, if applicable
+        // If empty block, no need for VC
+        if (victim->tag != 0 && vc) {
+            int pos = victim_cache->lookup(tag, index);
+
+            if (pos != -1) {
+                // VC hit
+                // Remove target block from VC
+                Block* temp = new Block(victim->B, victim->K, victim->sb);
+                victim_cache->remove(pos, temp);
+                victim_cache->push(victim, stats);
+
+                // Perform eviction and copy block back to cache
+                block = evict(tag, index);
+                block.reset(temp);
+
+                std::cout << pos << " HERE " << std::endl;
+
+                // Check for subblock miss
+                if (!block->read(offset)) {
+                    int num_invalid = block->num_invalid(offset);
+                    stats->bytes_transferred += num_invalid * (1 << size.K);
+                    block->write_many(offset);
+                    stats->subblock_misses++;
+                    std::cout << pos << " SBBSBS " << std::endl;
+                }
+
+            } else {
+                // VC miss
+                stats->vc_misses++;
+                
+                // Push current block to FIFO
+                block = evict(tag, index);
+                victim_cache->push(block, stats);
+            }
+        } else {
+            // Find suitable victim to evict
+            // Or return first empty block
+            // Note: *only* if not already found
+            block = evict(tag, index);
+
+            // Retrieve subblock and prefetch subsequent
+            // Fetch required subblocks from memory
+            int bytes = block->write_many(offset);
+            stats->bytes_transferred += bytes;
+        }
 
         return READ_MISS;
     }
@@ -260,7 +346,8 @@ Cache::evict(u64 tag, u64 index) {
     auto block = find_victim(index);
 
     // If empty block, just ignore the eviction
-    if (block->tag != 0) {
+    // If VC active, do not writeback now!
+    if (block->tag != 0 && !vc) {
         // Replace the block in cache
         // Check if dirty first => writeback
         if (block->dirty) {
@@ -333,7 +420,7 @@ void Cache::lru_push(u64 tag, u64 index) {
         auto& l = lru[0];
         l->push(tag);
     } else {
-        auto&l = lru[index];
+        auto& l = lru[index];
         l->push(tag);
     }
 }
