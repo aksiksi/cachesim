@@ -4,8 +4,9 @@
 #include <vector>
 #include <forward_list>
 
-#include "cachesim.hpp"
 #include "block.hpp"
+#include "cachesim.hpp"
+#include "lru.hpp"
 #include "victim.hpp"
 
 #define DEBUG false
@@ -28,22 +29,6 @@ enum CacheResult {
     WRITE_MISS,
     WRITE_HIT,
     WRITE_SB_MISS
-};
-
-class LRU {
-public:
-    LRU(int m) : max_size(m) {}
-    void push(u64 tag);
-    u64 pop();
-private:
-    // Using forward_list for efficiency
-    std::forward_list<u64> stack;
-    size_t size = 0; // Current size of LRU
-    int max_size; // Max LRU size
-
-    // Stores the last popped value for case
-    // of eviction push before pop!
-    u64 last_popped = 0;
 };
 
 /*

@@ -92,8 +92,8 @@ void parse_args(int argc, char **argv, inputargs_t& args) {
     static const char* ALLOWED_ARGS = "C:B:S:V:K:i:";
     
     int c;
-    uint64_t num;  // Stores converted arg from char* to uint64_t
-    uint64_t *arg; // Pointer to struct arg (DRY)
+    u64 num = 0;  // Stores converted arg from char* to uint64_t
+    u64 *arg; // Pointer to struct arg (DRY)
 
     // Set defaults for args
     args.C = DEFAULT_C;
@@ -194,16 +194,14 @@ int main(int argc, char **argv) {
 
     // Core simulation loop
     while (*fs >> mode >> std::hex >> address) {
-        CacheResult result;
-
         switch (mode) {
             case 'r':
             case 'R':
-                result = L1.read(address);
+                L1.read(address);
                 break;
             case 'w':
             case 'W':
-                result = L1.write(address);
+                L1.write(address);
                 break;
             default:
                 exit_on_error("Invalid input file format");

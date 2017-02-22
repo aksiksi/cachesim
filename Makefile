@@ -3,7 +3,7 @@ CFLAGS=-c -std=c++11 -g -Wall
 
 all: cachesim clean
 
-cachesim: victim.o block.o cachesim.o cache.o
+cachesim: lru.o victim.o block.o cachesim.o cache.o
 	$(CC) *.o -o cachesim
 
 cachesim.o: src/cachesim.cpp
@@ -17,6 +17,9 @@ block.o: src/block.cpp
 
 victim.o: src/victim.cpp
 	$(CC) $(CFLAGS) src/victim.cpp -o victim.o
+
+lru.o: src/lru.cpp
+	$(CC) $(CFLAGS) src/lru.cpp -o lru.o
 
 clean:
 	rm -f *.o

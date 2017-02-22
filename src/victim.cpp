@@ -1,6 +1,5 @@
 #include "cachesim.hpp"
 #include "victim.hpp"
-#include "block.hpp"
 
 #include <iostream>
 
