@@ -127,8 +127,8 @@ bool Cache::check_vc(const u64 tag, const u64 index, const u64 offset) {
     auto victim = find_victim(index);
 
     // Check VC, if applicable
-    // If empty block, no need for VC
-    if (victim->tag != 0 && vc) {
+    // Check VC even if block is empty (???)
+    if (vc) {
         int pos = victim_cache->lookup(tag, index);
 
         // Target block is a hit in VC
