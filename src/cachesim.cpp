@@ -3,43 +3,15 @@
 #include <fstream>
 #include <iostream>
 
-// C includes
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-
 #include "cachesim.hpp"
 #include "cache.hpp"
+
+// C includes
+#include <unistd.h>
 
 void exit_on_error(std::string msg) {
     std::cout << "Error: " << msg << std::endl;
     exit(EXIT_FAILURE);
-}
-
-std::string cache_result_status(CacheResult cr) {
-    std::string msg;
-    
-    switch (cr) {
-        case READ_HIT:
-            msg = "Read hit";
-            break;
-        case READ_MISS:
-            msg = "Read miss";
-            break;
-        case READ_SB_MISS:
-            msg = "Read subblock miss";
-            break;
-        case WRITE_HIT:
-            msg = "Write hit";
-            break;
-        case WRITE_MISS:
-            msg = "Write miss";
-            break;
-        default:
-            msg = "Unknown";
-    }
-
-    return msg;
 }
 
 void print_statistics(cache_stats_t* p_stats) {
@@ -148,12 +120,10 @@ void parse_args(int argc, char **argv, inputargs_t& args) {
 }
 
 int main(int argc, char **argv) {
-    // Allocate a args struct and pass by ref
+    // Allocate a args struct
     inputargs_t args;
 
     // Parse command line args
-    // Info stored in global args `struct`
-    // Return if file input
     parse_args(argc, argv, args);
 
     // Create cache_stats `struct`
@@ -184,9 +154,13 @@ int main(int argc, char **argv) {
     // Exits if invalid parameters
     CacheType ct = find_cache_type(cache_size);
 
+    bool vc = false;
+    if (cache_size.V > 0)
+        vc = true;
+
     // Create L1 cache with given size, type
     // Pass in stats object
-    Cache L1 (cache_size, ct, &stats, false); // No VC
+    Cache L1 (cache_size, ct, &stats, vc);
 
     // Variables for formatting trace input
     char mode;
@@ -208,10 +182,20 @@ int main(int argc, char **argv) {
         }
     }
 
-    stats.write_misses_combined = stats.write_misses;
-    stats.read_misses_combined = stats.read_misses;
+    // Note: if VC present, need to check both!
+    if (!vc) {
+        stats.write_misses_combined = stats.write_misses;
+        stats.read_misses_combined = stats.read_misses;
+    }
+
     stats.misses = stats.read_misses + stats.write_misses;
     stats.miss_rate = static_cast<double>(stats.misses + stats.subblock_misses) / stats.accesses;
+
+    if (vc) {
+        double vc_miss_rate = static_cast<double>(stats.vc_misses) / stats.misses;
+        stats.miss_rate *= vc_miss_rate;
+    }
+
     stats.avg_access_time = stats.hit_time + stats.miss_rate * stats.miss_penalty;
 
     print_statistics(&stats);

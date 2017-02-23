@@ -22,6 +22,15 @@ Block::Block(const Block& other) {
     valid = other.valid;
 }
 
+Block& Block::operator=(const Block& other) {
+    K = other.K, B = other.B, sb = other.sb;
+    tag = other.tag, index = other.index;
+    n = (1 << (B-K));
+    dirty = other.dirty;
+    valid = other.valid;
+    return *this;
+}
+
 // Read a single subblock
 bool Block::read(u64 offset) {
     // No subblocking = always hit

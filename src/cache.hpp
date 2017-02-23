@@ -51,6 +51,9 @@ private:
     std::vector<std::vector<std::shared_ptr<Block>>> cache;
     int rows, cols;
 
+    // Check cache for specific block
+    std::shared_ptr<Block> find_block(const u64 tag, const u64 index);
+
     cache_stats_t* stats;
 
     std::shared_ptr<Block> find_victim(u64 index);
@@ -64,6 +67,7 @@ private:
     // Victim cache
     bool vc = false;
     VictimCache* victim_cache;
+    bool check_vc(const u64 tag, const u64 index, const u64 offset);
 
     // Cache index extraction
     inline u64 get_tag(u64 addr) {

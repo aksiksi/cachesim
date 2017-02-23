@@ -13,13 +13,14 @@ public:
     int lookup(const u64 tag, const u64 index);
 
     // Remove block from VC at position `pos`
-    // temp is used to pass block data back to caller
-    bool remove(const int pos, Block* temp);
+    // Returns ptr to block removed
+    Block* remove(const int pos);
 
     // Push a block onto VC
     // Remove last if size > V
     // stats* required to update write_backs
-    bool push(const std::shared_ptr<Block>, cache_stats_t* stats);
+    // K required to know size of subblock
+    void push(const std::shared_ptr<Block>, cache_stats_t* stats, u64 K);
 private:
     u64 V; // Number of blocks
     std::deque<Block> queue;

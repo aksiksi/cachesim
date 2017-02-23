@@ -25,6 +25,7 @@ public:
 
     // Copy constructor
     Block(const Block& other);
+    Block& operator=(const Block& other);
 
     // Read a single subblock
     bool read(u64 offset);

@@ -84,6 +84,80 @@ Cache::~Cache() {
         delete victim_cache;
 }
 
+std::shared_ptr<Block>
+Cache::find_block(const u64 tag, const u64 index) {
+    std::shared_ptr<Block> block;
+
+    if (ct == FULLY_ASSOC) {
+        // FA cache -> search for tag directly
+        for (auto& each: cache) {
+            auto b = each[0];
+
+            // Check for tag
+            if (b->tag == tag) {
+                block = b;
+                break;
+            }
+        }
+    } else if (ct == DIRECT_MAPPED) {
+        // Retrieve the "only" possible block
+        block = cache[index][0];
+    } else {
+        // Set associative cache
+        // Retrieve set based on index
+        auto& set = cache[index];
+
+        for (auto b: set) {
+            if (b->tag == tag) {
+                block = b;
+                break;
+            }
+        }
+    }
+
+    return block;
+}
+
+bool Cache::check_vc(const u64 tag, const u64 index, const u64 offset) {
+    std::shared_ptr<Block> block;
+    bool hit = false;
+
+    // Find the next victim
+    // tag = 0 if empty block
+    auto victim = find_victim(index);
+
+    // Check VC, if applicable
+    // If empty block, no need for VC
+    if (victim->tag != 0 && vc) {
+        int pos = victim_cache->lookup(tag, index);
+
+        // Target block is a hit in VC
+        if (pos != -1) {
+            hit = true;
+
+            // Remove target from VC, return ptr to it
+            Block *target = victim_cache->remove(pos);
+
+            // Perform eviction and copy block back to cache
+            block = evict(tag, index);
+            block.reset(target);
+
+            // Check for subblock miss
+            if (!block->read(offset)) {
+                int num_invalid = block->num_invalid(offset);
+                stats->bytes_transferred += num_invalid * (1 << size.K);
+                block->write_many(offset);
+                stats->subblock_misses++;
+            }
+        } else {
+            // VC miss
+            stats->vc_misses++;
+        }
+    }
+
+    return hit;
+}
+
 CacheResult Cache::read(u64 addr) {
     const u64 tag = get_tag(addr);
     const u64 index = get_index(addr);
@@ -95,45 +169,18 @@ CacheResult Cache::read(u64 addr) {
     stats->accesses++;
     stats->reads++;
 
+    auto block = find_block(tag, index);
     bool hit = false;
-    std::shared_ptr<Block> block;
 
-    if (ct == FULLY_ASSOC) {
-        // FA cache -> search for tag directly
-        for (auto& each: cache) {
-            auto b = each[0];
+    if (block != nullptr)
+        hit = true;
 
-            // Check for tag
-            if (b->tag == tag) {
-                hit = true;
-                block = b;
-                break;
-            }
-        }
-    } else if (ct == DIRECT_MAPPED) {
-        // Retrieve the "only" possible block
-        block = cache[index][0];
-
-        if (block->tag == tag)
-            hit = true;
-    } else {
-        // Set associative cache
-        // Retrieve set based on index
-        auto& set = cache[index];
-
-        for (auto b: set) {
-            if (b->tag == tag) {
-                hit = true;
-                block = b;
-                break;
-            }
-        }
-    }
+    CacheResult cr;
 
     if (hit) {
         // Subblock hit
         if (block->read(offset))
-            return READ_HIT;
+            cr = READ_HIT;
         // Subblock miss! -> Perform prefetch
         else {
             // Only count invalid subblocks for prefetch
@@ -144,52 +191,16 @@ CacheResult Cache::read(u64 addr) {
 
             stats->subblock_misses++;
         
-            return READ_SB_MISS;
+            cr = READ_SB_MISS;
         }
     } else {
         // Full read miss
         stats->read_misses++;
-        
-        // Find the victim
-        // tag = 0 if empty block
-        auto victim = find_victim(index);
 
-        // Check VC, if applicable
-        // If empty block, no need for VC
-        if (victim->tag != 0 && vc) {
-            int pos = victim_cache->lookup(tag, index);
+        // Check the VC first
+        bool vc_hit = check_vc(tag, index, offset);
 
-            if (pos != -1) {
-                // VC hit
-                // Remove target block from VC
-                Block* temp = new Block(victim->B, victim->K, victim->sb);
-                victim_cache->remove(pos, temp);
-                victim_cache->push(victim, stats);
-
-                // Perform eviction and copy block back to cache
-                block = evict(tag, index);
-                block.reset(temp);
-
-                std::cout << pos << " HERE " << std::endl;
-
-                // Check for subblock miss
-                if (!block->read(offset)) {
-                    int num_invalid = block->num_invalid(offset);
-                    stats->bytes_transferred += num_invalid * (1 << size.K);
-                    block->write_many(offset);
-                    stats->subblock_misses++;
-                    std::cout << pos << " SBBSBS " << std::endl;
-                }
-
-            } else {
-                // VC miss
-                stats->vc_misses++;
-                
-                // Push current block to FIFO
-                block = evict(tag, index);
-                victim_cache->push(block, stats);
-            }
-        } else {
+        if (!vc_hit) {
             // Find suitable victim to evict
             // Or return first empty block
             // Note: *only* if not already found
@@ -199,51 +210,37 @@ CacheResult Cache::read(u64 addr) {
             // Fetch required subblocks from memory
             int bytes = block->write_many(offset);
             stats->bytes_transferred += bytes;
+
+            if (vc) {
+                // Missed both cache and VC
+                stats->read_misses_combined++;
+            }
         }
 
-        return READ_MISS;
+        cr = READ_MISS;
     }
+
+    return cr;
 }
 
 CacheResult Cache::write(u64 addr) {
-    u64 tag = get_tag(addr);
-    u64 index = get_index(addr);
-    u64 offset = get_offset(addr);
+    const u64 tag = get_tag(addr);
+    const u64 index = get_index(addr);
+    const u64 offset = get_offset(addr);
 
     lru_push(tag, index);
 
     stats->accesses++;
     stats->writes++;
 
+    // Find block in cache
+    // If not present, = nullptr
+    auto block = find_block(tag, index);
     bool hit = false;
-    std::shared_ptr<Block> block;
 
-    if (ct == FULLY_ASSOC) {
-        for (auto& each: cache) {
-            auto b = each[0];
-
-            // Check for tag in cache
-            if (b->tag == tag) {
-                block = b;
-                hit = true;
-                break;
-            }
-        }
-    } else if (ct == DIRECT_MAPPED) {
-        block = cache[index][0];
-        
-        if (block->tag == tag)
-            hit = true;
-    } else {
-        auto& set = cache[index];
-
-        for (auto& b: set) {
-            if (b->tag == tag) {
-                hit = true;
-                block = b;
-                break;
-            }
-        }
+    if (block != nullptr) {
+        hit = true;
+        block->dirty = true;
     }
 
     CacheResult cr;
@@ -263,28 +260,37 @@ CacheResult Cache::write(u64 addr) {
 
         block->write_many(offset);
     } else {
-        // Miss handled the same in all cases
-        // Select a block, and evict it
-        // If there is an empty spot, that is returned instead
-        block = evict(tag, index);
-
-        // Write data to it
-        block->write_many(offset);
-
+        // Full write miss
         stats->write_misses++;
+
+        // Check the VC first
+        bool vc_hit = check_vc(tag, index, offset);
+
+        if (!vc_hit) {
+            // Find suitable victim to evict
+            // Or return first empty block
+            // Note: *only* if not already found
+            block = evict(tag, index);
+
+            // Write subblocks needed into block in cache
+            block->write_many(offset);
+
+            if (vc) {
+                // Missed both cache and VC
+                stats->write_misses_combined++;
+            }
+        }
 
         cr = WRITE_MISS;
     }
-
-    block->dirty = true;
 
     return cr;
 }
 
 std::shared_ptr<Block>
 Cache::evict(u64 tag, u64 index) {
-    // Find block to use in cache
-    // If block selected is dirty, write it to memory
+    // Find a block to evict from cache (victim)
+    // Returns tag = 0 if empty slot found
     auto block = find_victim(index);
 
     // If empty block, just ignore the eviction
@@ -294,12 +300,16 @@ Cache::evict(u64 tag, u64 index) {
         // Check if dirty first => writeback
         if (block->dirty) {
             // Write back valid subblocks to memory
-//            int valid = block->num_valid();
-//            stats->bytes_transferred += valid * (1 << size.K);
-            // TODO: check if correct!
-            stats->bytes_transferred += (1 << size.B);
+            int valid = block->num_valid();
+            stats->bytes_transferred += valid * (1 << size.K);
             stats->write_backs++;
+
+            // TODO: check if correct!
+//            stats->bytes_transferred += (1 << size.B);
         }
+    } else if (block->tag != 0 && vc) {
+        // If VC active, push evicted block to VC
+        victim_cache->push(block, stats, size.K);
     }
 
     block->replace(tag, index, false);
