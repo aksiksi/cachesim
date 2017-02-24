@@ -12,7 +12,7 @@
 #define DEBUG false
 
 struct CacheSize {
-    u64 C, B, S, K, N, V;
+    u64 C, B, S, K, V;
 };
 
 enum CacheType {
@@ -21,6 +21,8 @@ enum CacheType {
     SET_ASSOC,
     VICTIM
 };
+
+CacheType find_cache_type(CacheSize size);
 
 enum CacheResult {
     READ_HIT,

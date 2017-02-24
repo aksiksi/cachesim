@@ -31,17 +31,6 @@ void print_statistics(cache_stats_t* p_stats) {
     printf("Average access time (AAT): %f\n", p_stats->avg_access_time);
 }
 
-CacheType find_cache_type(CacheSize size) {
-    // Determine cache type
-    if (size.S == (size.C - size.B)) {
-        return CacheType::FULLY_ASSOC;
-    } else if (size.S == 0) {
-        return CacheType::DIRECT_MAPPED;
-    } else {
-        return CacheType::SET_ASSOC;
-    }
-}
-
 // Struct type for input argument storage
 struct inputargs_t {
     u64 C, B, S, V, K, N;
@@ -142,7 +131,6 @@ int main(int argc, char **argv) {
         args.B,
         args.S,
         args.K,
-        args.N,
         args.V
     };
 

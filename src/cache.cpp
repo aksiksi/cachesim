@@ -3,6 +3,17 @@
 
 #include "cache.hpp"
 
+CacheType find_cache_type(CacheSize size) {
+    // Determine cache type
+    if (size.S == (size.C - size.B)) {
+        return CacheType::FULLY_ASSOC;
+    } else if (size.S == 0) {
+        return CacheType::DIRECT_MAPPED;
+    } else {
+        return CacheType::SET_ASSOC;
+    }
+}
+
 Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc) : 
             size(size), ct(ct), stats(cs), vc(vc) {
     u64 C = size.C, B = size.B, S = size.S, K = size.K, V = size.V;
@@ -102,6 +113,11 @@ Block* Cache::find_block(const u64 tag, const u64 index) {
     } else if (ct == DIRECT_MAPPED) {
         // Retrieve the "only" possible block
         block = &cache[index][0];
+
+        // A "miss"
+        if (block->tag != tag)
+            block = nullptr;
+
     } else {
         // Set associative cache
         // Retrieve set based on index
