@@ -1,25 +1,22 @@
 CC=g++
+LFLAGS=-std=c++11 -g -Wall
 CFLAGS=-c -std=c++11 -g -Wall
+OBJ=obj
+BIN=bin
 
-all: cachesim clean
+DEPS=$(OBJ)/util.o $(OBJ)/lru.o $(OBJ)/victim.o $(OBJ)/block.o $(OBJ)/cache.o
+CACHESIM=$(BIN)/cachesim
+CACHEOPT=$(BIN)/cacheopt
 
-cachesim: lru.o victim.o block.o cachesim.o cache.o
-	$(CC) *.o -o cachesim
+.PHONY: clean
 
-cachesim.o: src/cachesim.cpp
-	$(CC) $(CFLAGS) src/cachesim.cpp -o cachesim.o
+$(OBJ)/%.o: src/%.cpp
+	$(CC) $(CFLAGS) $^ -o $@
 
-cache.o: src/cache.cpp
-	$(CC) $(CFLAGS) src/cache.cpp -o cache.o
+$(BIN)/%: src/%.cpp $(DEPS)
+	$(CC) $(LFLAGS) $^ -o $@
 
-block.o: src/block.cpp
-	$(CC) $(CFLAGS) src/block.cpp -o block.o
-
-victim.o: src/victim.cpp
-	$(CC) $(CFLAGS) src/victim.cpp -o victim.o
-
-lru.o: src/lru.cpp
-	$(CC) $(CFLAGS) src/lru.cpp -o lru.o
+default: $(CACHEOPT) $(CACHESIM)
 
 clean:
-	rm -f *.o
+	rm -f $(OBJ)/* $(CACHESIM) $(CACHEOPT)

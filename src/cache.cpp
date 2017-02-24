@@ -125,12 +125,7 @@ Block* Cache::check_vc(const u64 addr) {
 
     Block* block = nullptr;
 
-    // Find the next victim
-    // tag = 0 if empty block
-    Block* victim = find_victim(index);
-
-    // Check VC, if applicable
-    // Check VC even if block is empty (???)
+    // Check VC *in parallel with cache* (!!!)
     if (vc) {
         int pos = victim_cache->lookup(tag, index);
 

@@ -1,7 +1,6 @@
 #include "cachesim.hpp"
+#include "util.hpp" // exit_on_error
 #include "victim.hpp"
-
-#include <iostream>
 
 int VictimCache::lookup(const u64 tag, const u64 index) {
     int i;

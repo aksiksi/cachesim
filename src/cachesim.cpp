@@ -5,14 +5,10 @@
 
 #include "cachesim.hpp"
 #include "cache.hpp"
+#include "util.hpp" // exit_on_error
 
 // C includes
 #include <unistd.h>
-
-void exit_on_error(std::string msg) {
-    std::cout << "Error: " << msg << std::endl;
-    exit(EXIT_FAILURE);
-}
 
 void print_statistics(cache_stats_t* p_stats) {
     printf("\nCache Statistics\n");

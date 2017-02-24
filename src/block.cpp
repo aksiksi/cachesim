@@ -1,4 +1,5 @@
 #include "block.hpp"
+#include "util.hpp" // exit_on_error
 
 #include <iostream>
 
