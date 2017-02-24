@@ -1,5 +1,5 @@
 CC=g++
-LFLAGS=-std=c++11 -g -Wall
+LFLAGS=-std=c++11 -Wall
 CFLAGS=-c -std=c++11 -g -Wall
 OBJ=obj
 BIN=bin
