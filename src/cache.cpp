@@ -118,9 +118,13 @@ Cache::find_block(const u64 tag, const u64 index) {
     return block;
 }
 
-bool Cache::check_vc(const u64 tag, const u64 index, const u64 offset) {
+std::shared_ptr<Block>
+Cache::check_vc(const u64 addr) {
+    const u64 tag = get_tag(addr);
+    const u64 index = get_index(addr);
+    const u64 offset = get_offset(addr);
+
     std::shared_ptr<Block> block;
-    bool hit = false;
 
     // Find the next victim
     // tag = 0 if empty block
@@ -133,8 +137,6 @@ bool Cache::check_vc(const u64 tag, const u64 index, const u64 offset) {
 
         // Target block is a hit in VC
         if (pos != -1) {
-            hit = true;
-
             // Remove target from VC, return ptr to it
             Block *target = victim_cache->remove(pos);
 
@@ -142,10 +144,13 @@ bool Cache::check_vc(const u64 tag, const u64 index, const u64 offset) {
             block = evict(tag, index);
             block.reset(target);
 
+            auto p1 = &victim;
+            auto p2 = &block;
+            auto p3 = &this->cache[51][7];
+
             // Check for subblock miss
             if (!block->read(offset)) {
-                int num_invalid = block->num_invalid(offset);
-                stats->bytes_transferred += num_invalid * (1 << size.K);
+                stats->bytes_transferred += block->num_invalid(offset);;
                 block->write_many(offset);
                 stats->subblock_misses++;
             }
@@ -155,7 +160,7 @@ bool Cache::check_vc(const u64 tag, const u64 index, const u64 offset) {
         }
     }
 
-    return hit;
+    return block;
 }
 
 CacheResult Cache::read(u64 addr) {
@@ -177,6 +182,11 @@ CacheResult Cache::read(u64 addr) {
 
     CacheResult cr;
 
+    /// TODO:
+    // SB MISSES ARE OFF
+    // THIS MEANS THAT ISSUES WITH VALID BITS??
+    // PERHAPS EDGE CASE IN READ/WRITE_MANY
+
     if (hit) {
         // Subblock hit
         if (block->read(offset))
@@ -184,9 +194,7 @@ CacheResult Cache::read(u64 addr) {
         // Subblock miss! -> Perform prefetch
         else {
             // Only count invalid subblocks for prefetch
-            int num_invalid = block->num_invalid(offset);
-            stats->bytes_transferred += num_invalid * (1 << size.K);
-
+            stats->bytes_transferred += block->num_invalid(offset);
             block->write_many(offset);
 
             stats->subblock_misses++;
@@ -198,9 +206,11 @@ CacheResult Cache::read(u64 addr) {
         stats->read_misses++;
 
         // Check the VC first
-        bool vc_hit = check_vc(tag, index, offset);
+        // If hit, handle it within check_vc
+        block = check_vc(addr);
 
-        if (!vc_hit) {
+        // VC miss
+        if (block == nullptr) {
             // Find suitable victim to evict
             // Or return first empty block
             // Note: *only* if not already found
@@ -238,42 +248,32 @@ CacheResult Cache::write(u64 addr) {
     auto block = find_block(tag, index);
     bool hit = false;
 
-    if (block != nullptr) {
+    if (block != nullptr)
         hit = true;
-        block->dirty = true;
-    }
 
     CacheResult cr;
 
     if (hit) {
-        if (block->read(offset))
+        if (block->read(offset)) {
             cr = WRITE_HIT;
-        else {
+        } else {
             // Subblock miss
             stats->subblock_misses++;
 
-            int num_invalid = block->num_invalid(offset);
-            stats->bytes_transferred += num_invalid * (1 << size.K);
-
             cr = WRITE_SB_MISS;
         }
-
-        block->write_many(offset);
     } else {
         // Full write miss
         stats->write_misses++;
 
         // Check the VC first
-        bool vc_hit = check_vc(tag, index, offset);
+        block = check_vc(addr);
 
-        if (!vc_hit) {
+        if (block == nullptr) {
             // Find suitable victim to evict
             // Or return first empty block
             // Note: *only* if not already found
             block = evict(tag, index);
-
-            // Write subblocks needed into block in cache
-            block->write_many(offset);
 
             if (vc) {
                 // Missed both cache and VC
@@ -283,6 +283,13 @@ CacheResult Cache::write(u64 addr) {
 
         cr = WRITE_MISS;
     }
+
+    // Write invalid subblocks needed into block in cache
+    stats->bytes_transferred += block->num_invalid(offset);
+    block->write_many(offset);
+
+    // Always set as dirty
+    block->dirty = true;
 
     return cr;
 }
@@ -300,16 +307,13 @@ Cache::evict(u64 tag, u64 index) {
         // Check if dirty first => writeback
         if (block->dirty) {
             // Write back valid subblocks to memory
-            int valid = block->num_valid();
-            stats->bytes_transferred += valid * (1 << size.K);
+            int num_valid = block->num_valid();
+            stats->bytes_transferred += num_valid;
             stats->write_backs++;
-
-            // TODO: check if correct!
-//            stats->bytes_transferred += (1 << size.B);
         }
     } else if (block->tag != 0 && vc) {
         // If VC active, push evicted block to VC
-        victim_cache->push(block, stats, size.K);
+        victim_cache->push(block, stats);
     }
 
     block->replace(tag, index, false);

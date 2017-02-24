@@ -67,7 +67,7 @@ private:
     // Victim cache
     bool vc = false;
     VictimCache* victim_cache;
-    bool check_vc(const u64 tag, const u64 index, const u64 offset);
+    std::shared_ptr<Block> check_vc(const u64 addr);
 
     // Cache index extraction
     inline u64 get_tag(u64 addr) {

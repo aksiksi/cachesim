@@ -97,11 +97,11 @@ int Block::num_valid() {
     // Returns number of valid subblocks
     int c = 0;
 
-    for (int i = 0; i < n; i++)
-        if (valid[i])
+    for (int v: valid)
+        if (v == 1)
             c++;
     
-    return c;
+    return c * (1 << K);
 }
 
 int Block::num_invalid(u64 offset) {
@@ -112,7 +112,7 @@ int Block::num_invalid(u64 offset) {
         if (valid[idx] == 0)
             c++;
     
-    return c;
+    return c * (1 << K);
 }
 
 int Block::find_idx(u64 offset) {

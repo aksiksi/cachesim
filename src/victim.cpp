@@ -28,14 +28,10 @@ Block* VictimCache::remove(const int pos) {
     // Remove block from VC
     queue.erase(queue.begin() + pos);
 
-    // "Requeue" new block in FIFO (if non-empty)
-    // if (block->tag != 0)
-    //     this->push(block);
-
     return temp;
 }
 
-void VictimCache::push(const std::shared_ptr<Block> block, cache_stats_t* stats, u64 K) {
+void VictimCache::push(const std::shared_ptr<Block> block, cache_stats_t* stats) {
     // Push block to front of queue
     // Vector will make a copy of the block passed in
     queue.push_front(*block);
@@ -47,8 +43,8 @@ void VictimCache::push(const std::shared_ptr<Block> block, cache_stats_t* stats,
         // Writeback if target is dirty
         if (out_block.dirty) {
             // Write back valid subblocks to memory
-            int valid = block->num_valid();
-            stats->bytes_transferred += valid * (1 << K);
+            int num_valid = out_block.num_valid();
+            stats->bytes_transferred += num_valid;
             stats->write_backs++;
         }
 
