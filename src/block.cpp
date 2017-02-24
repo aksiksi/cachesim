@@ -4,9 +4,6 @@
 #include <iostream>
 
 Block::Block(u64 B, u64 K, bool sb) : B(B), K(K), sb(sb) {
-    // Skip init if no subblocking
-    if (!sb) return;
-    
     // Number of subblocks = 2^B / 2^K
     n = (1 << (B-K));
 

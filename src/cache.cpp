@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "cache.hpp"
+#include "util.hpp"
 
 CacheType find_cache_type(CacheSize size) {
     // Determine cache type
@@ -14,9 +15,32 @@ CacheType find_cache_type(CacheSize size) {
     }
 }
 
-Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc) : 
-            size(size), ct(ct), stats(cs), vc(vc) {
+void Cache::compute_stats() {
+    stats->misses = stats->read_misses + stats->write_misses;
+
+    // Different MR based on presence/absence of VC
+    if (vc) {
+        stats->miss_rate = static_cast<double>(stats->misses) / stats->accesses;
+        double vc_miss_rate = static_cast<double>(stats->vc_misses + stats->subblock_misses) / stats->misses;
+        stats->miss_rate *= vc_miss_rate;
+    } else {
+        stats->write_misses_combined = stats->write_misses;
+        stats->read_misses_combined = stats->read_misses;
+        stats->miss_rate = static_cast<double>(stats->misses + stats->subblock_misses) / stats->accesses;
+    }
+
+    stats->avg_access_time = stats->hit_time + stats->miss_rate * stats->miss_penalty;
+}
+
+Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
+            size(size), ct(ct), stats(cs) {
     u64 C = size.C, B = size.B, S = size.S, K = size.K, V = size.V;
+
+    // Check for constraint violations
+    if (S > (C-B))
+        exit_on_error("S must be <= C-B!");
+    if (K > (B-1))
+        exit_on_error("K must be <= B-1!");
     
     offset_mask = static_cast<u64>(1 << B) - 1;
     index_mask = static_cast<u64>((1 << (C-B-S)) - 1) << B;
@@ -66,8 +90,10 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc) :
     }
 
     // Init VC
-    if (this->vc)
+    if (V > 0) {
         victim_cache = new VictimCache(V);
+        vc = true;
+    }
 
     #if DEBUG
         std::cout << "Tag mask: " << std::hex << tag_mask << std::endl;

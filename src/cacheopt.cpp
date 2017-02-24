@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <string>
 
 #include "cache.hpp"
 #include "util.hpp"
@@ -20,67 +21,68 @@ int main() {
     CacheSize size;
     CacheType ct;
     cache_stats_t stats;
-    bool vc;
 
     Cache* L1;
 
     std::ifstream ifs;
     char mode;
     u64 address;
+    std::vector<std::string> traces = {
+        "traces/astar.trace",
+        "traces/bzip2.trace",
+        "traces/mcf.trace",
+        "traces/perlbench.trace"
+    };
 
-    for (B = 3; B <= 7; B++) {
-        for (C = B; C <= 30; C++) {
-            for (S = 0; S <= (C-B); S++) {
-                for (V = 0; V <= 8; V++) {
-                    for (K = 1; K <= (B-1); K++) {
-                        ifs.open("traces/bzip2.trace");
+    // Select best params given 64 KB budget
+    C = 15;
+    V = 2;
+    B = 7;
+    K = 6;
 
-                        size = {C, B, S, K, V};
-                        ct = find_cache_type(size);
-                        stats = {};
+    for (int i = 0; i < traces.size(); i++) {
+        double aat_min = 999999;
+        CacheSize best_size;
 
-                        vc = false;
+        for (S = 0; S <= (C - B); S++) {
+            ifs.open(traces[i]);
 
-                        if (V > 0)
-                            vc = true;
+            size = {C, B, S, K, V};
+            ct = find_cache_type(size);
+            stats = {};
 
-                        L1 = new Cache(size, ct, &stats, vc);
+            L1 = new Cache(size, ct, &stats);
 
-                        // Core simulation loop
-                        while (ifs >> mode >> std::hex >> address) {
-                            switch (mode) {
-                                case 'r':
-                                case 'R':
-                                    L1->read(address);
-                                    break;
-                                case 'w':
-                                case 'W':
-                                    L1->write(address);
-                                    break;
-                                default:
-                                    exit_on_error("Invalid input file format");
-                            }
-                        }
-
-                        stats.misses = stats.read_misses + stats.write_misses;
-                        stats.miss_rate = static_cast<double>(stats.misses + stats.subblock_misses) / stats.accesses;
-
-                        if (vc) {
-                            double vc_miss_rate = static_cast<double>(stats.vc_misses) / stats.misses;
-                            stats.miss_rate *= vc_miss_rate;
-                        }
-
-                        stats.avg_access_time = stats.hit_time + stats.miss_rate * stats.miss_penalty;
-
-                        print_data(stats.avg_access_time, size);
-
-                        delete L1;
-
-                        ifs.close();
-                    }
+            // Core simulation loop
+            while (ifs >> mode >> std::hex >> address) {
+                switch (mode) {
+                    case 'r':
+                    case 'R':
+                        L1->read(address);
+                        break;
+                    case 'w':
+                    case 'W':
+                        L1->write(address);
+                        break;
+                    default:
+                        exit_on_error("Invalid input file format");
                 }
             }
+
+            L1->compute_stats();
+
+            // Determine if better than previous best
+            if (stats.avg_access_time < aat_min) {
+                aat_min = stats.avg_access_time;
+                best_size = size;
+            }
+
+            delete L1;
+            ifs.close();
         }
+
+        std::cout << "Trace: " << traces[i] << std::endl;
+        print_data(aat_min, best_size);
     }
 
     return 0;

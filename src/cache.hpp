@@ -38,11 +38,13 @@ enum CacheResult {
 */
 class Cache {
 public:
-    Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc);
+    Cache(CacheSize size, CacheType ct, cache_stats_t* cs);
     ~Cache();
 
     CacheResult read(u64 addr);
     CacheResult write(u64 addr);
+
+    void compute_stats();
 
 private:
     u64 tag_mask = 0, index_mask = 0, offset_mask = 0;

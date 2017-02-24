@@ -138,13 +138,9 @@ int main(int argc, char **argv) {
     // Exits if invalid parameters
     CacheType ct = find_cache_type(cache_size);
 
-    bool vc = false;
-    if (cache_size.V > 0)
-        vc = true;
-
     // Create L1 cache with given size, type
     // Pass in stats object
-    Cache L1 (cache_size, ct, &stats, vc);
+    Cache L1 (cache_size, ct, &stats);
 
     // Variables for formatting trace input
     char mode;
@@ -166,21 +162,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Note: if VC present, need to check both!
-    if (!vc) {
-        stats.write_misses_combined = stats.write_misses;
-        stats.read_misses_combined = stats.read_misses;
-    }
-
-    stats.misses = stats.read_misses + stats.write_misses;
-    stats.miss_rate = static_cast<double>(stats.misses + stats.subblock_misses) / stats.accesses;
-
-    if (vc) {
-        double vc_miss_rate = static_cast<double>(stats.vc_misses) / stats.misses;
-        stats.miss_rate *= vc_miss_rate;
-    }
-
-    stats.avg_access_time = stats.hit_time + stats.miss_rate * stats.miss_penalty;
+    L1.compute_stats();
 
     print_statistics(&stats);
 
