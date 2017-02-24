@@ -48,16 +48,16 @@ private:
     CacheType ct;
 
     // Emulates cache: stores tag/idx -> block mapping
-    std::vector<std::vector<std::shared_ptr<Block>>> cache;
+    std::vector<std::vector<Block>> cache;
     int rows, cols;
 
     // Check cache for specific block
-    std::shared_ptr<Block> find_block(const u64 tag, const u64 index);
+    Block* find_block(const u64 tag, const u64 index);
 
     cache_stats_t* stats;
 
-    std::shared_ptr<Block> find_victim(u64 index);
-    std::shared_ptr<Block> evict(u64 tag, u64 index);
+    Block* find_victim(u64 index);
+    Block* evict(u64 tag, u64 index);
 
     // LRU stack
     std::vector<std::shared_ptr<LRU>> lru;
@@ -67,7 +67,7 @@ private:
     // Victim cache
     bool vc = false;
     VictimCache* victim_cache;
-    std::shared_ptr<Block> check_vc(const u64 addr);
+    Block* check_vc(const u64 addr);
 
     // Cache index extraction
     inline u64 get_tag(u64 addr) {

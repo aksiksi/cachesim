@@ -20,7 +20,7 @@ public:
     // Remove last if size > V
     // stats* required to update write_backs
     // K required to know size of subblock
-    void push(const std::shared_ptr<Block>, cache_stats_t* stats);
+    void push(const Block* block, cache_stats_t* stats);
 private:
     u64 V; // Number of blocks
     std::deque<Block> queue;

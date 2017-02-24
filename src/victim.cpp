@@ -31,14 +31,14 @@ Block* VictimCache::remove(const int pos) {
     return temp;
 }
 
-void VictimCache::push(const std::shared_ptr<Block> block, cache_stats_t* stats) {
+void VictimCache::push(const Block* block, cache_stats_t* stats) {
     // Push block to front of queue
     // Vector will make a copy of the block passed in
     queue.push_front(*block);
 
     // Perform eviction, if required
     if (queue.size() > V) {
-        Block &out_block = queue[V];
+        Block& out_block = queue[V];
 
         // Writeback if target is dirty
         if (out_block.dirty) {

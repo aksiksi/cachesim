@@ -31,14 +31,15 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs, bool vc) :
     bool sb = true;
 
     // Init cache
-    // Set maximum size of vector for optimization
-    cache.resize(rows, std::vector<std::shared_ptr<Block>>(cols));
-
     // Allocate a cache block to each vector position
-    // Use shared_ptr for easy MM (RAII)
-    for (int i = 0; i < rows; i++)
+    for (int i = 0; i < rows; i++) {
+        std::vector<Block> row;
+
         for (int j = 0; j < cols; j++)
-            cache[i][j] = std::make_shared<Block>(B, K, sb);
+            row.emplace_back(B, K, sb);
+
+        cache.push_back(row);
+    }
 
     // Init LRU
     int max_size;
@@ -84,14 +85,13 @@ Cache::~Cache() {
         delete victim_cache;
 }
 
-std::shared_ptr<Block>
-Cache::find_block(const u64 tag, const u64 index) {
-    std::shared_ptr<Block> block;
+Block* Cache::find_block(const u64 tag, const u64 index) {
+    Block* block = nullptr;
 
     if (ct == FULLY_ASSOC) {
         // FA cache -> search for tag directly
         for (auto& each: cache) {
-            auto b = each[0];
+            auto b = &each[0];
 
             // Check for tag
             if (b->tag == tag) {
@@ -101,15 +101,15 @@ Cache::find_block(const u64 tag, const u64 index) {
         }
     } else if (ct == DIRECT_MAPPED) {
         // Retrieve the "only" possible block
-        block = cache[index][0];
+        block = &cache[index][0];
     } else {
         // Set associative cache
         // Retrieve set based on index
         auto& set = cache[index];
 
-        for (auto b: set) {
-            if (b->tag == tag) {
-                block = b;
+        for (auto& b: set) {
+            if (b.tag == tag) {
+                block = &b;
                 break;
             }
         }
@@ -118,17 +118,16 @@ Cache::find_block(const u64 tag, const u64 index) {
     return block;
 }
 
-std::shared_ptr<Block>
-Cache::check_vc(const u64 addr) {
+Block* Cache::check_vc(const u64 addr) {
     const u64 tag = get_tag(addr);
     const u64 index = get_index(addr);
     const u64 offset = get_offset(addr);
 
-    std::shared_ptr<Block> block;
+    Block* block = nullptr;
 
     // Find the next victim
     // tag = 0 if empty block
-    auto victim = find_victim(index);
+    Block* victim = find_victim(index);
 
     // Check VC, if applicable
     // Check VC even if block is empty (???)
@@ -138,15 +137,15 @@ Cache::check_vc(const u64 addr) {
         // Target block is a hit in VC
         if (pos != -1) {
             // Remove target from VC, return ptr to it
+            // Note: ptr is TEMPORARY
             Block *target = victim_cache->remove(pos);
 
             // Perform eviction and copy block back to cache
             block = evict(tag, index);
-            block.reset(target);
+            *block = *target;
 
-            auto p1 = &victim;
-            auto p2 = &block;
-            auto p3 = &this->cache[51][7];
+            // Now cpied into cache, so delete
+            delete target;
 
             // Check for subblock miss
             if (!block->read(offset)) {
@@ -181,11 +180,6 @@ CacheResult Cache::read(u64 addr) {
         hit = true;
 
     CacheResult cr;
-
-    /// TODO:
-    // SB MISSES ARE OFF
-    // THIS MEANS THAT ISSUES WITH VALID BITS??
-    // PERHAPS EDGE CASE IN READ/WRITE_MANY
 
     if (hit) {
         // Subblock hit
@@ -294,8 +288,7 @@ CacheResult Cache::write(u64 addr) {
     return cr;
 }
 
-std::shared_ptr<Block>
-Cache::evict(u64 tag, u64 index) {
+Block* Cache::evict(u64 tag, u64 index) {
     // Find a block to evict from cache (victim)
     // Returns tag = 0 if empty slot found
     auto block = find_victim(index);
@@ -321,17 +314,16 @@ Cache::evict(u64 tag, u64 index) {
     return block;
 }
 
-std::shared_ptr<Block>
-Cache::find_victim(u64 index) {
+Block* Cache::find_victim(u64 index) {
     // Figure out candidate block for cache eviction
     // IF there are empty blocks, return first such one as a "victim"
-    std::shared_ptr<Block> block;
+    Block* block = nullptr;
     u64 victim_tag;
     
     if (ct == FULLY_ASSOC) {
         // Look for an empty block first 
         for (int i = 0; i < cache.size(); i++) {
-            block = cache[i][0];
+            block = &cache[i][0];
             if (block->tag == 0)
                 return block;
         }
@@ -340,18 +332,18 @@ Cache::find_victim(u64 index) {
         victim_tag = lru_get(index);
 
         for (int i = 0; i < cache.size(); i++) {
-            block = cache[i][0];
+            block = &cache[i][0];
             if (block->tag == victim_tag)
                 break;
         }
     } else if (ct == DIRECT_MAPPED) {
-        block = cache[index][0];
+        block = &cache[index][0];
     } else {
         auto& set = cache[index];
 
         // Look for empty block first
         for (int i = 0; i < set.size(); i++) {
-            block = set[i];
+            block = &set[i];
             if (block->tag == 0)
                 return block;
         }
@@ -360,7 +352,7 @@ Cache::find_victim(u64 index) {
         victim_tag = lru_get(index);
 
         for (int i = 0; i < set.size(); i++) {
-            block = set[i];
+            block = &set[i];
             if (block->tag == victim_tag)
                 break;
         }
