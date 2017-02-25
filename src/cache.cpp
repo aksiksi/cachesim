@@ -86,13 +86,13 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
 
     if (ct != DIRECT_MAPPED) {
         for (int i = 0; i < rows; i++)
-            lru.push_back(std::make_shared<LRU>(max_size));
+            this->lru.push_back(std::make_shared<LRU>(max_size));
     }
 
     // Init VC
     if (V > 0) {
-        victim_cache = new VictimCache(V);
-        vc = true;
+        this->victim_cache = new VictimCache(V);
+        this->vc = true;
     }
 
     #if DEBUG
@@ -119,7 +119,7 @@ Cache::Cache(CacheSize size, CacheType ct, cache_stats_t* cs) :
 Cache::~Cache() {
     // Free up VC
     if (this->vc)
-        delete victim_cache;
+        delete this->victim_cache;
 }
 
 Block* Cache::find_block(const u64 tag, const u64 index) {
@@ -402,10 +402,10 @@ void Cache::lru_push(u64 tag, u64 index) {
     if (ct == DIRECT_MAPPED)
         return;
     else if (ct == FULLY_ASSOC) {
-        auto& l = lru[0];
+        auto& l = this->lru[0];
         l->push(tag);
     } else {
-        auto& l = lru[index];
+        auto& l = this->lru[index];
         l->push(tag);
     }
 }
@@ -416,10 +416,10 @@ u64 Cache::lru_get(u64 index) {
         
     // Get LRU tag (last element in stack)
     if (ct == SET_ASSOC) {
-        auto& l = lru[index];
+        auto& l = this->lru[index];
         return l->pop();
     } else {
-        auto& l = lru[0];
+        auto& l = this->lru[0];
         return l->pop();
     }
 }

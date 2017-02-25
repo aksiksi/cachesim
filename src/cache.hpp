@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <forward_list>
+#include <memory>
 
 #include "block.hpp"
 #include "cachesim.hpp"
