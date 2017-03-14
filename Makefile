@@ -5,6 +5,7 @@ OBJ=obj
 
 DEPS=$(OBJ)/util.o $(OBJ)/lru.o $(OBJ)/victim.o $(OBJ)/block.o $(OBJ)/cache.o
 CACHESIM=cachesim
+CACHEOPT=cacheopt
 
 .PHONY: clean
 
@@ -14,7 +15,7 @@ $(OBJ)/%.o: src/%.cpp
 %: src/%.cpp $(DEPS)
 	$(CC) $(LFLAGS) $^ -o $@
 
-default: $(CACHESIM)
+default: $(CACHESIM) $(CACHEOPT)
 
 clean:
 	rm -f $(OBJ)/* $(CACHESIM)
